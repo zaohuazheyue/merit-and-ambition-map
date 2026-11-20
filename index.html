@@ -17,7 +17,8 @@
 <meta name="twitter:card" content="summary_large_image">
 <link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://unpkg.com/qrcode-generator@1.4.4/qrcode.js"></script>
+<script>window.qrcode || document.write('<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"><\/script>');</script>
 <style>
   /* ===== 分享按钮 ===== */
   .share-btn{
@@ -969,7 +970,7 @@ let shareCanvas = null, shareSeq = 0, lastQR = "";
       <button class="sclose" onclick="closeShare()">×</button>
       <h3>📤 分享到微信</h3>
       <p class="sdesc">下面是生成好的分享卡片：标题 + 封面图 + 链接。
-        封面按当前三场活动和真实经纬度画出来，可保存发朋友圈、做公众号封面或群卡片图。</p>
+        封面按当前活动和真实经纬度画出来，可保存发朋友圈、做公众号封面或群卡片图。</p>
       <div class="wxs">
         <div class="wxs-head"><span class="wxs-av">志</span><span>志远行</span></div>
         <div class="wxs-title">志远行 · 北京共学活动地图</div>
@@ -1207,16 +1208,16 @@ function drawCard(g, card, a){
 
 async function qrImage(text){
   return new Promise(res=>{
-    if(typeof QRCode === "undefined" || !text) return res(null);
+    if(!text) return res(null);
     try{
-      QRCode.toDataURL(text, {margin:0, width:320, errorCorrectionLevel:"M",
-        color:{dark:"#12233a", light:"#ffffff"}}, (err,url)=>{
-        if(err || !url) return res(null);
-        const img = new Image();
-        img.onload = ()=> res(img);
-        img.onerror = ()=> res(null);
-        img.src = url;
-      });
+      if(typeof qrcode !== "function") return res(null);
+      const qr = qrcode(0, "M");
+      qr.addData(text);
+      qr.make();
+      const img = new Image();
+      img.onload = ()=> res(img);
+      img.onerror = ()=> res(null);
+      img.src = qr.createDataURL(8, 0);
     }catch(e){ res(null); }
   });
 }
@@ -1291,9 +1292,9 @@ async function buildCover(qrLink){
 
   const tx = 280;
   g.fillStyle = "#1b2a3a"; g.font = `700 30px ${FONT_SC}`;
-  g.fillText(qr ? "扫码打开活动地图" : "分享链接未设置", tx, 1070);
+  g.fillText(qr ? "扫码打开活动地图" : (qrLink ? "二维码待生成" : "分享链接未设置"), tx, 1070);
   g.fillStyle = "#6a7a8c"; g.font = `400 21px ${FONT_SC}`;
-  g.fillText("三场活动的时间、时长、收费与报名入口都在图里", tx, 1116);
+  g.fillText(activities.length + " 场活动的时间、时长、收费与报名入口都在图里", tx, 1116);
   g.font = `400 18px ${FONT_SC}`;
   if(qrLink){
     g.fillStyle = "#8d9aa8"; g.fillText(ellip(g, qrLink, 700), tx, 1156);
