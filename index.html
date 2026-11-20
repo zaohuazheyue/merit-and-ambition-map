@@ -1134,11 +1134,6 @@ function drawConnector(g, card, dot, color){
   g.beginPath(); g.moveTo(ax,ay); g.quadraticCurveTo(mx, ay, dot[0], dot[1]); g.stroke();
   g.restore();
 }
-function drawDot(g, dot, color){
-  g.beginPath(); g.arc(dot[0],dot[1],14,0,Math.PI*2); g.fillStyle = "rgba(255,255,255,.92)"; g.fill();
-  g.beginPath(); g.arc(dot[0],dot[1],9,0,Math.PI*2); g.fillStyle = color; g.fill();
-  g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
-}
 function fitTitle(g, text, maxW, maxLines){
   for(const size of [22,21,20,19,18,17]){
     g.font = `700 ${size}px ${FONT_SC}`;
@@ -1267,7 +1262,6 @@ async function buildCover(qrLink){
   g.restore();
 
   boxes.forEach(b=> drawCard(g, b, b.act));
-  activities.forEach(a=> drawDot(g, proj(a.lat,a.lng), COLORS[a.type]));
 
   if(activities.length > COVER_MAX_CARDS){
     const more = `另有 ${activities.length - COVER_MAX_CARDS} 场活动 · 详见地图页`;
