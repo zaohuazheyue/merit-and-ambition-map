@@ -1,371 +1,382 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>11.21 – 11.22 · 志远行共学活动地图</title>
-<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
-<style>
-  /* ===== 分享按钮 ===== */
-  .share-btn{
-    margin-left:auto;padding:6px 15px;border:none;border-radius:16px;cursor:pointer;
-    background:linear-gradient(135deg,#ff4d4f,#ff7a45);color:#fff;font-size:12.5px;font-weight:700;
-    box-shadow:0 4px 12px rgba(255,77,79,.35);white-space:nowrap;
-  }
-  .share-btn:hover{filter:brightness(1.07);}
-
-  /* ===== 分享弹窗 ===== */
-  .smodal{
-    position:fixed;inset:0;z-index:1600;display:none;background:rgba(6,14,24,.62);
-    backdrop-filter:blur(2px);overflow-y:auto;padding:22px 12px;
-  }
-  .smodal.on{display:block;}
-  .smodal .scard{
-    position:relative;width:min(540px,96vw);margin:0 auto;background:#12233a;
-    border:1px solid #2b4766;border-radius:14px;padding:18px 18px 16px;
-    box-shadow:0 24px 60px rgba(0,0,0,.6);
-  }
-  .smodal .sclose{
-    position:absolute;right:10px;top:8px;background:none;border:none;color:#7e96ae;
-    font-size:22px;line-height:1;cursor:pointer;
-  }
-  .smodal .sclose:hover{color:#fff;}
-  .smodal h3{font-size:15px;color:#ffd166;}
-  .smodal .sdesc{font-size:11.5px;color:#8fa8c0;margin:6px 0 14px;line-height:1.6;}
-  .smodal .slab{display:block;font-size:11.5px;color:#8fa8c0;margin:14px 0 6px;}
-  .smodal .sprev{width:100%;border-radius:8px;display:block;background:#0d1b2a;}
-  .smodal input{
-    width:100%;padding:7px 10px;border-radius:6px;border:1px solid #2f4a6b;
-    background:#0a1728;color:#eee;font-size:12px;
-  }
-  .smodal input:focus{outline:none;border-color:#4361ee;}
-  .smodal .stip2{font-size:10.5px;color:#8d9aa8;margin-top:6px;line-height:1.6;}
-  .smodal .stip2.ok2{color:#7ee0b0;}
-  .smodal .sbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
-  .smodal .sbtns button{
-    flex:1 1 44%;padding:9px;border-radius:7px;border:none;cursor:pointer;
-    background:#4361ee;color:#fff;font-size:12.5px;
-  }
-  .smodal .sbtns button.ghost2{background:transparent;border:1px solid #3a5a80;color:#a9c4e0;}
-
-  /* 微信卡片预览 */
-  .wxs{background:#fff;border-radius:10px;padding:14px;color:#111;}
-  .wxs-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#8a8a8a;}
-  .wxs-av{
-    width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    background:linear-gradient(135deg,#ff4d4f,#ff7a45);color:#fff;font-size:13px;font-weight:700;
-  }
-  .wxs-title{font-size:15px;font-weight:700;color:#1a1a1a;margin:10px 0 8px;}
-  .wxs-thumb{width:100%;border-radius:4px;display:block;background:#f0f0f0;}
-  .wxs-tag{font-size:11px;color:#576b95;margin-top:8px;}
-</style>
-<style>
-  *{margin:0;padding:0;box-sizing:border-box;}
-  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1b2a;color:#eee;}
-
-  /* ===== 顶部：出发地栏 ===== */
-  .originbar{
-    flex:none;display:flex;align-items:center;gap:8px;height:46px;padding:0 14px;
-    background:#0f1e33;border-bottom:1px solid #223a58;font-size:12.5px;
-  }
-  .originbar .ob-label{color:#ffd166;font-weight:700;white-space:nowrap;}
-  .originbar input{
-    flex:0 1 330px;min-width:150px;padding:6px 10px;border-radius:6px;
-    border:1px solid #2f4a6b;background:#0a1728;color:#eee;font-size:12.5px;
-  }
-  .originbar input:focus{outline:none;border-color:#4361ee;}
-  .originbar button{
-    padding:6px 12px;border:none;border-radius:6px;background:#4361ee;color:#fff;
-    font-size:12.5px;cursor:pointer;white-space:nowrap;
-  }
-  .originbar button.ghostbtn{background:transparent;border:1px solid #3a5a80;color:#a9c4e0;}
-  .originbar .ob-status{color:#7e96ae;font-size:11.5px;margin-left:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .originbar .ob-status.ok{color:#7ee0b0;}
-
-  /* ===== 主体：地图舞台 ===== */
-  .main{display:flex;flex-direction:column;height:72vh;}
-  #stage{flex:1;min-height:0;position:relative;overflow:hidden;background:#e9e2d4;}
-  #map{position:absolute;inset:0;}
-
-  /* 云雾 */
-  .fog-layer{
-    position:absolute;inset:0;z-index:500;pointer-events:none;
-    background:
-      radial-gradient(ellipse at 0% 0%,  rgba(200,210,230,.45), transparent 40%),
-      radial-gradient(ellipse at 100% 0%, rgba(200,210,230,.40), transparent 38%),
-      radial-gradient(ellipse at 0% 100%, rgba(180,195,220,.45), transparent 40%),
-      radial-gradient(ellipse at 100% 100%,rgba(180,195,220,.40), transparent 38%);
-    -webkit-mask:radial-gradient(ellipse 65% 65% at 50% 50%, transparent 55%, black 100%);
-            mask:radial-gradient(ellipse 65% 65% at 50% 50%, transparent 55%, black 100%);
-    animation:drift 80s ease-in-out infinite alternate;
-  }
-  @keyframes drift{from{transform:scale(1.02)}to{transform:scale(1.06) translateX(-1.5%)}}
-
-  /* 舞台顶部说明 */
-  .stage-head{
-    position:absolute;left:50%;top:12px;transform:translateX(-50%);
-    z-index:660;pointer-events:none;text-align:center;white-space:nowrap;
-    background:rgba(13,27,42,.82);border:1px solid rgba(255,209,102,.35);
-    padding:8px 16px;border-radius:8px;backdrop-filter:blur(4px);
-  }
-  .stage-head b{font-size:14px;color:#ffd166;letter-spacing:.5px;}
-  .stage-head span{display:block;font-size:11px;color:#9fb3c8;margin-top:2px;}
-
-  /* SVG 连线层 */
-  #wire{position:absolute;inset:0;z-index:600;pointer-events:none;width:100%;height:100%;}
-  #wire path{fill:none;stroke-width:1.5;opacity:.8;stroke-dasharray:6 4;animation:dashFlow 1.2s linear infinite;}
-  #wire path.hot{stroke-width:3;opacity:1;stroke-dasharray:none;}
-  @keyframes dashFlow{to{stroke-dashoffset:-20;}}
-
-  /* ===== 便利贴 ===== */
-  .clue{
-    position:absolute;z-index:700;width:238px;
-    padding:16px 13px 11px;border-radius:3px;
-    background:var(--note,#fff3b0);color:#3b2f2f;
-    font-size:12px;line-height:1.5;
-    transform:translate(-50%,-50%) rotate(var(--tilt,-1.4deg));
-    box-shadow:0 10px 20px rgba(0,0,0,.38),0 2px 5px rgba(0,0,0,.22);
-    cursor:pointer;
-    transition:transform .18s ease,box-shadow .18s ease;
-  }
-  .clue::before{
-    content:'';position:absolute;top:-9px;left:50%;width:78px;height:20px;
-    transform:translateX(-50%) rotate(-3deg);
-    background:rgba(255,255,255,.55);
-    border-left:1px dashed rgba(0,0,0,.10);border-right:1px dashed rgba(0,0,0,.10);
-    box-shadow:0 1px 3px rgba(0,0,0,.15);
-  }
-  .clue::after{
-    content:'';position:absolute;right:0;bottom:0;width:20px;height:20px;border-radius:0 0 3px 0;
-    background:linear-gradient(135deg,rgba(0,0,0,.06) 45%,rgba(0,0,0,.16) 50%,rgba(255,255,255,.35) 55%);
-  }
-  .clue:hover{transform:translate(-50%,-50%) rotate(0deg) scale(1.035);z-index:850;}
-  .clue.hot{box-shadow:0 0 0 3px #ffd166,0 14px 26px rgba(0,0,0,.45);z-index:900;}
-
-  /* 活动多的时候自动收紧，避免卡片叠在一起 */
-  .clue.small{width:212px;font-size:11.5px;padding:14px 11px 10px;}
-  .clue.small h5{font-size:12.5px;}
-  .clue.small .host{display:none;}
-  .clue.tiny{width:200px;font-size:11px;padding:12px 10px 9px;}
-  .clue.tiny h5{font-size:12px;margin-bottom:5px;}
-  .clue.tiny .row.dur,.clue.tiny .row.loc{display:none;}
-  .clue.tiny .host{display:none;}
-  .clue.tiny .go{font-size:11px;padding:5px 0;margin-top:7px;}
-  .clue.tiny .tag{margin-bottom:4px;}
-
-  .clue .tag{
-    display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
-    color:#fff;background:var(--accent,#c98a00);
-    padding:1px 7px;border-radius:9px;margin-bottom:5px;
-  }
-  .clue h5{font-size:13.5px;line-height:1.35;margin-bottom:7px;font-weight:700;}
-  .clue .rows{border-top:1px dashed rgba(0,0,0,.22);padding-top:7px;}
-  .clue .row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;}
-  .clue .row i{font-style:normal;flex:none;width:16px;opacity:.75;}
-  .clue .row span{flex:1;}
-  .clue .row.fee span{font-weight:700;color:#1b7a4b;}
-  .clue .row.fee.pend span{color:#a35a00;}
-
-  .clue .links{
-    margin-top:8px;padding-top:7px;border-top:1px dashed rgba(0,0,0,.22);
-    display:flex;flex-wrap:wrap;gap:4px;align-items:center;
-  }
-  .clue .links .lbl{font-size:10px;color:#8a7550;flex:none;}
-  .chip{
-    font-size:10.5px;text-decoration:none;color:#243b53;background:rgba(255,255,255,.72);
-    border:1px solid rgba(0,0,0,.16);border-radius:10px;padding:1px 8px;
-    display:inline-block;white-space:nowrap;cursor:pointer;transition:background .15s;
-  }
-  .chip:hover{background:#fff;}
-  .chip.mini{background:rgba(255,255,255,.55);border-style:dashed;}
-  .clue .host{font-size:10px;color:#8a7550;margin-top:6px;}
-
-  /* 查询交通按钮 */
-  .clue .go{
-    display:block;width:100%;margin-top:9px;padding:6px 0;
-    border:1px solid rgba(0,0,0,.22);border-radius:13px;
-    background:rgba(255,255,255,.78);color:#243b53;
-    font-size:12px;font-weight:700;letter-spacing:.5px;cursor:pointer;
-    transition:background .15s,transform .12s;
-  }
-  .clue .go:hover{background:#fff;transform:translateY(-1px);}
-
-  /* ===== 交通方案弹窗 ===== */
-  .modal{
-    position:fixed;inset:0;z-index:1500;display:none;
-    background:rgba(6,14,24,.55);backdrop-filter:blur(2px);
-    align-items:center;justify-content:center;
-  }
-  .modal.on{display:flex;}
-  .modal-card{
-    width:min(440px,92vw);max-height:78vh;overflow-y:auto;position:relative;
-    background:#12233a;border:1px solid #2b4766;border-radius:12px;
-    padding:18px 18px 14px;box-shadow:0 24px 50px rgba(0,0,0,.55);
-  }
-  .modal-card .close{
-    position:absolute;right:10px;top:8px;background:none;border:none;color:#7e96ae;
-    font-size:22px;line-height:1;cursor:pointer;
-  }
-  .modal-card .close:hover{color:#fff;}
-  .modal-card h3{font-size:15px;color:#ffd166;padding-right:24px;line-height:1.4;}
-  .modal-card .sub{font-size:11.5px;color:#8fa8c0;margin:6px 0 12px;line-height:1.5;}
-  .modal-card .sub b{color:#dfe9f3;font-weight:600;}
-
-  .mode{
-    background:#0e1c2e;border:1px solid #243c58;border-radius:9px;
-    padding:10px 12px;margin-bottom:8px;
-  }
-  .mode-h{display:flex;align-items:baseline;gap:8px;font-size:13px;}
-  .mode-h .ico{font-size:14px;}
-  .mode-h b{color:#e8f0f8;}
-  .mode-h .t{margin-left:auto;color:#7ee0b0;font-weight:700;font-size:13px;white-space:nowrap;}
-  .mode-d{font-size:11px;color:#8fa8c0;margin-top:4px;line-height:1.5;}
-  .mode-a{
-    display:inline-block;margin-top:7px;font-size:11.5px;color:#8ec5ff;text-decoration:none;
-    border-bottom:1px dashed rgba(142,197,255,.5);
-  }
-  .mode-a:hover{color:#bcdcff;}
-  .modal-foot{display:flex;gap:8px;margin-top:12px;}
-  .modal-foot button{
-    flex:1;padding:8px;border-radius:7px;border:1px solid #3a5a80;
-    background:transparent;color:#a9c4e0;font-size:12px;cursor:pointer;
-  }
-  .modal-foot button:hover{border-color:#8ec5ff;color:#fff;}
-  .modal-card .tip{font-size:10.5px;color:#6b8299;margin-top:10px;line-height:1.6;}
-
-  /* 底部三栏 */
-  .tabs{display:flex;height:28vh;}
-  .tab-nav{flex:none;width:150px;display:flex;flex-direction:column;}
-  .tab-nav button{flex:1;border:none;background:#13223a;color:#9ab;font-size:13.5px;
-    cursor:pointer;border-left:3px solid transparent;text-align:left;padding-left:14px;}
-  .tab-nav button.active{background:#1c3252;color:#fff;border-left-color:#4361ee;}
-  .tab-content{flex:1;overflow-y:auto;background:#1c3252;padding:16px;}
-  .item{background:#13223a;border-radius:8px;padding:10px 12px;margin-bottom:8px;
-        display:flex;justify-content:space-between;align-items:center;gap:12px;}
-  .item .t{font-size:13px;}
-  .item .s{font-size:11px;color:#8aa0b8;margin-top:3px;line-height:1.5;}
-  .item .s a{color:#8ec5ff;text-decoration:none;}
-  .pts{color:#ffd166;font-weight:bold;background:none;border:none;cursor:pointer;font-size:13px;flex:none;}
-  .empty{color:#5d7691;font-size:13px;}
-  .share-box{display:flex;gap:8px;margin-bottom:12px;}
-  .share-box input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid #345;background:#0d1b2a;color:#eee;font-size:12.5px;}
-  .share-box button{padding:8px 14px;border:none;border-radius:6px;background:#4361ee;color:#fff;cursor:pointer;font-size:12.5px;}
-
-  /* 出发地标记 */
-  .origin-pin{
-    width:22px;height:22px;border-radius:50%;background:#4361ee;border:3px solid #fff;
-    box-shadow:0 0 0 3px rgba(67,97,238,.35),0 2px 6px rgba(0,0,0,.4);
-    display:flex;align-items:center;justify-content:center;font-size:10px;
-  }
-
-  /* 轻提示 */
-  #toast{
-    position:fixed;left:50%;bottom:12%;transform:translateX(-50%) translateY(20px);
-    background:rgba(13,27,42,.95);color:#ffd166;border:1px solid rgba(255,209,102,.4);
-    padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;
-    transition:.25s;z-index:2000;
-  }
-  #toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
-</style>
-</head>
-<body>
-
-<div class="main">
-  <!-- 出发地栏 -->
-  <div class="originbar">
-    <span class="ob-label">📍 出发地</span>
-    <input id="originInput" placeholder="输入住址或常去地点，如：海淀区紫竹桥 / 天通苑">
-    <button onclick="applyOrigin()">设为出发地</button>
-    <button class="ghostbtn" onclick="locateMe()">用当前位置</button>
-    <span id="originStatus" class="ob-status">未设置 · 设置后才能算交通</span>
-    <button class="share-btn" onclick="openShare()">📤 分享封面</button>
-  </div>
-
-  <div id="stage">
-    <div id="map"></div>
-    <div class="fog-layer"></div>
-    <div class="stage-head">
-      <b id="stageTitle">志远行 · 北京共学活动地图</b>
-      <span>顶部填「出发地」→ 点便利贴的「查询交通」= 步行 / 公交 / 打车三种方案</span>
-    </div>
-    <svg id="wire"></svg>
-  </div>
-</div>
-
-<div class="tabs">
-  <div class="tab-nav">
-    <button class="active" onclick="switchTab(0)">🏆 每周收获打卡</button>
-    <button onclick="switchTab(1)">💬 收获总结分享</button>
-    <button onclick="switchTab(2)">🛠 实践工坊</button>
-  </div>
-  <div class="tab-content" id="tab0"></div>
-  <div class="tab-content" id="tab1" style="display:none"></div>
-  <div class="tab-content" id="tab2" style="display:none"></div>
-</div>
-
-<!-- 交通方案弹窗 -->
-<div id="tmodal" class="modal" onclick="if(event.target===this)closeTraffic()">
-  <div class="modal-card">
-    <button class="close" onclick="closeTraffic()">×</button>
-    <h3 id="tmTitle">交通方案</h3>
-    <p class="sub" id="tmSub"></p>
-    <div id="tmBody"></div>
-    <div class="modal-foot">
-      <button onclick="drawRoute()">在地图上画路线</button>
-      <button onclick="clearRoute()">清除路线</button>
-    </div>
-    <p class="tip">
-      时间按城市平均速度估算（步行 4.8 km/h、公交 16 km/h、市区驾车 24 km/h，路网系数 1.35），
-      打车费按北京出租车估价（起步 13 元 / 3 km，之后约 2.3 元每公里）。
-      点「在高德查看」可打开实时公交、地铁换乘与真实路线。
-    </p>
-  </div>
-</div>
-
-<div id="toast"></div>
-
-<script>
-/* ================================================================
-   ① 地图 → ② 数据 → ③ 渲染 → ④ 出发地 → ⑤ 交通方案
-   ================================================================ */
-
-/* ---------- ① 地图初始化 ---------- */
-/* 可选：填入天地图 key 后自动切换到天地图底图（不填则用免密钥的高德底图） */
-const TDT_KEY = "3dc2be715a8be693db753a0a75b74748";
-
-const map = L.map("map", { center:[39.9042,116.4074], zoom:11 });
-
-/* 坐标系：天地图底图用 WGS84，高德底图用 GCJ-02 —— 按底图自动转换，避免点位偏 300–500 米 */
-const USE_GCJ = !TDT_KEY;
-function toMapLL(lat, lng){ return USE_GCJ ? wgs2gcj(lat, lng) : [lat, lng]; }    // 外部 WGS → 底图
-function fromMapLL(lat, lng){ return USE_GCJ ? gcj2wgs(lat, lng) : [lat, lng]; }  // 底图 → 外部 WGS
-function toGcjLL(lat, lng){ return USE_GCJ ? [lat, lng] : wgs2gcj(lat, lng); }    // 底图 → 高德 GCJ
-
-if(TDT_KEY){
-  L.tileLayer(`https://t{s}.tianditu.gov.cn/vec_w/wmts?layer=vec&style=default&tilematrixset=w&Service=WMTS&Request=GetTile&Version=1.0.0&Format=tiles&TileMatrix={z}&TileMatrixSet=w&TileRow={y}&TileCol={x}&tk=${TDT_KEY}`, {
-    subdomains:["0","1","2","3","4","5","6","7"], maxZoom:18, attribution:"© 天地图"
-  }).addTo(map);
-  L.tileLayer(`https://t{s}.tianditu.gov.cn/cva_w/wmts?layer=cva&style=default&tilematrixset=w&Service=WMTS&Request=GetTile&Version=1.0.0&Format=tiles&TileMatrix={z}&TileMatrixSet=w&TileRow={y}&TileCol={x}&tk=${TDT_KEY}`, {
-    subdomains:["0","1","2","3","4","5","6","7"]
-  }).addTo(map);
-}else{
-  L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", {
-    subdomains:["1","2","3","4"], maxZoom:18, attribution:"© 高德地图"
-  }).addTo(map);
-}
-
-/* ---------- ② 唯一一份数据 ---------- */
-const COLORS = {charity:"#e0a020", explore:"#2f9e6e", workshop:"#7c6df2"};
-const NOTE   = {charity:"#fff3b0", explore:"#d8f3dc", workshop:"#e5dbff"};
-const TAG    = {charity:"公益",   explore:"探索",    workshop:"工坊"};
-
-const LINK_HUDONG_H5   = "https://h5-party-jfy77.hudongba.com/party/jfy77.html?inviteCode=ED93531CCDF039EDCC621B22FF01EBBD";
-const LINK_HUDONG_MINI = "#小程序://互动吧/Y33bi3lZpzayIwf";
-const LINK_WX          = "https://mp.weixin.qq.com/s/2Se1YWpCiyOVRAe1vBD0nQ";
-
-/* 坐标为地点大致位置，仅用于地图示意 */
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>11.21 – 11.22 · 志远行共学活动地图</title>
+<meta name="description" content="11.21 – 11.22 北京 4 场活动：虎嗅F&M创新节 · 北京亲子棉花采摘周末营 · 北京昌平甘蔗采摘游 等">
+<meta property="og:type" content="website">
+<meta property="og:title" content="11.21 – 11.22 · 志远行共学活动地图">
+<meta property="og:description" content="11.21 – 11.22 北京 4 场活动：虎嗅F&M创新节 · 北京亲子棉花采摘周末营 · 北京昌平甘蔗采摘游 等">
+<meta property="og:image" content="https://zaohuazheyue.github.io/merit-and-ambition-map/weixin_cover.png">
+<meta property="og:image:width" content="1080">
+<meta property="og:image:height" content="1350">
+<meta property="og:url" content="https://zaohuazheyue.github.io/merit-and-ambition-map/">
+<meta property="og:site_name" content="志远行共学活动地图">
+<meta itemprop="image" content="https://zaohuazheyue.github.io/merit-and-ambition-map/weixin_cover.png">
+<meta name="twitter:card" content="summary_large_image">
+<link href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js"></script>
+<style>
+  /* ===== 分享按钮 ===== */
+  .share-btn{
+    margin-left:auto;padding:6px 15px;border:none;border-radius:16px;cursor:pointer;
+    background:linear-gradient(135deg,#ff4d4f,#ff7a45);color:#fff;font-size:12.5px;font-weight:700;
+    box-shadow:0 4px 12px rgba(255,77,79,.35);white-space:nowrap;
+  }
+  .share-btn:hover{filter:brightness(1.07);}
+
+  /* ===== 分享弹窗 ===== */
+  .smodal{
+    position:fixed;inset:0;z-index:1600;display:none;background:rgba(6,14,24,.62);
+    backdrop-filter:blur(2px);overflow-y:auto;padding:22px 12px;
+  }
+  .smodal.on{display:block;}
+  .smodal .scard{
+    position:relative;width:min(540px,96vw);margin:0 auto;background:#12233a;
+    border:1px solid #2b4766;border-radius:14px;padding:18px 18px 16px;
+    box-shadow:0 24px 60px rgba(0,0,0,.6);
+  }
+  .smodal .sclose{
+    position:absolute;right:10px;top:8px;background:none;border:none;color:#7e96ae;
+    font-size:22px;line-height:1;cursor:pointer;
+  }
+  .smodal .sclose:hover{color:#fff;}
+  .smodal h3{font-size:15px;color:#ffd166;}
+  .smodal .sdesc{font-size:11.5px;color:#8fa8c0;margin:6px 0 14px;line-height:1.6;}
+  .smodal .slab{display:block;font-size:11.5px;color:#8fa8c0;margin:14px 0 6px;}
+  .smodal .sprev{width:100%;border-radius:8px;display:block;background:#0d1b2a;}
+  .smodal input{
+    width:100%;padding:7px 10px;border-radius:6px;border:1px solid #2f4a6b;
+    background:#0a1728;color:#eee;font-size:12px;
+  }
+  .smodal input:focus{outline:none;border-color:#4361ee;}
+  .smodal .stip2{font-size:10.5px;color:#8d9aa8;margin-top:6px;line-height:1.6;}
+  .smodal .stip2.ok2{color:#7ee0b0;}
+  .smodal .sbtns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .smodal .sbtns button{
+    flex:1 1 44%;padding:9px;border-radius:7px;border:none;cursor:pointer;
+    background:#4361ee;color:#fff;font-size:12.5px;
+  }
+  .smodal .sbtns button.ghost2{background:transparent;border:1px solid #3a5a80;color:#a9c4e0;}
+
+  /* 微信卡片预览 */
+  .wxs{background:#fff;border-radius:10px;padding:14px;color:#111;}
+  .wxs-head{display:flex;align-items:center;gap:8px;font-size:12px;color:#8a8a8a;}
+  .wxs-av{
+    width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#ff4d4f,#ff7a45);color:#fff;font-size:13px;font-weight:700;
+  }
+  .wxs-title{font-size:15px;font-weight:700;color:#1a1a1a;margin:10px 0 8px;}
+  .wxs-thumb{width:100%;border-radius:4px;display:block;background:#f0f0f0;}
+  .wxs-tag{font-size:11px;color:#576b95;margin-top:8px;}
+</style>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:"PingFang SC","Microsoft YaHei",sans-serif;background:#0d1b2a;color:#eee;}
+
+  /* ===== 顶部：出发地栏 ===== */
+  .originbar{
+    flex:none;display:flex;align-items:center;gap:8px;height:46px;padding:0 14px;
+    background:#0f1e33;border-bottom:1px solid #223a58;font-size:12.5px;
+  }
+  .originbar .ob-label{color:#ffd166;font-weight:700;white-space:nowrap;}
+  .originbar input{
+    flex:0 1 330px;min-width:150px;padding:6px 10px;border-radius:6px;
+    border:1px solid #2f4a6b;background:#0a1728;color:#eee;font-size:12.5px;
+  }
+  .originbar input:focus{outline:none;border-color:#4361ee;}
+  .originbar button{
+    padding:6px 12px;border:none;border-radius:6px;background:#4361ee;color:#fff;
+    font-size:12.5px;cursor:pointer;white-space:nowrap;
+  }
+  .originbar button.ghostbtn{background:transparent;border:1px solid #3a5a80;color:#a9c4e0;}
+  .originbar .ob-status{color:#7e96ae;font-size:11.5px;margin-left:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .originbar .ob-status.ok{color:#7ee0b0;}
+
+  /* ===== 主体：地图舞台 ===== */
+  .main{display:flex;flex-direction:column;height:72vh;}
+  #stage{flex:1;min-height:0;position:relative;overflow:hidden;background:#e9e2d4;}
+  #map{position:absolute;inset:0;}
+
+  /* 云雾 */
+  .fog-layer{
+    position:absolute;inset:0;z-index:500;pointer-events:none;
+    background:
+      radial-gradient(ellipse at 0% 0%,  rgba(200,210,230,.45), transparent 40%),
+      radial-gradient(ellipse at 100% 0%, rgba(200,210,230,.40), transparent 38%),
+      radial-gradient(ellipse at 0% 100%, rgba(180,195,220,.45), transparent 40%),
+      radial-gradient(ellipse at 100% 100%,rgba(180,195,220,.40), transparent 38%);
+    -webkit-mask:radial-gradient(ellipse 65% 65% at 50% 50%, transparent 55%, black 100%);
+            mask:radial-gradient(ellipse 65% 65% at 50% 50%, transparent 55%, black 100%);
+    animation:drift 80s ease-in-out infinite alternate;
+  }
+  @keyframes drift{from{transform:scale(1.02)}to{transform:scale(1.06) translateX(-1.5%)}}
+
+  /* 舞台顶部说明 */
+  .stage-head{
+    position:absolute;left:50%;top:12px;transform:translateX(-50%);
+    z-index:660;pointer-events:none;text-align:center;white-space:nowrap;
+    background:rgba(13,27,42,.82);border:1px solid rgba(255,209,102,.35);
+    padding:8px 16px;border-radius:8px;backdrop-filter:blur(4px);
+  }
+  .stage-head b{font-size:14px;color:#ffd166;letter-spacing:.5px;}
+  .stage-head span{display:block;font-size:11px;color:#9fb3c8;margin-top:2px;}
+
+  /* SVG 连线层 */
+  #wire{position:absolute;inset:0;z-index:600;pointer-events:none;width:100%;height:100%;}
+  #wire path{fill:none;stroke-width:1.5;opacity:.8;stroke-dasharray:6 4;animation:dashFlow 1.2s linear infinite;}
+  #wire path.hot{stroke-width:3;opacity:1;stroke-dasharray:none;}
+  @keyframes dashFlow{to{stroke-dashoffset:-20;}}
+
+  /* ===== 便利贴 ===== */
+  .clue{
+    position:absolute;z-index:700;width:238px;
+    padding:16px 13px 11px;border-radius:3px;
+    background:var(--note,#fff3b0);color:#3b2f2f;
+    font-size:12px;line-height:1.5;
+    transform:translate(-50%,-50%) rotate(var(--tilt,-1.4deg));
+    box-shadow:0 10px 20px rgba(0,0,0,.38),0 2px 5px rgba(0,0,0,.22);
+    cursor:pointer;
+    transition:transform .18s ease,box-shadow .18s ease;
+  }
+  .clue::before{
+    content:'';position:absolute;top:-9px;left:50%;width:78px;height:20px;
+    transform:translateX(-50%) rotate(-3deg);
+    background:rgba(255,255,255,.55);
+    border-left:1px dashed rgba(0,0,0,.10);border-right:1px dashed rgba(0,0,0,.10);
+    box-shadow:0 1px 3px rgba(0,0,0,.15);
+  }
+  .clue::after{
+    content:'';position:absolute;right:0;bottom:0;width:20px;height:20px;border-radius:0 0 3px 0;
+    background:linear-gradient(135deg,rgba(0,0,0,.06) 45%,rgba(0,0,0,.16) 50%,rgba(255,255,255,.35) 55%);
+  }
+  .clue:hover{transform:translate(-50%,-50%) rotate(0deg) scale(1.035);z-index:850;}
+  .clue.hot{box-shadow:0 0 0 3px #ffd166,0 14px 26px rgba(0,0,0,.45);z-index:900;}
+
+  /* 活动多的时候自动收紧，避免卡片叠在一起 */
+  .clue.small{width:212px;font-size:11.5px;padding:14px 11px 10px;}
+  .clue.small h5{font-size:12.5px;}
+  .clue.small .host{display:none;}
+  .clue.tiny{width:200px;font-size:11px;padding:12px 10px 9px;}
+  .clue.tiny h5{font-size:12px;margin-bottom:5px;}
+  .clue.tiny .row.dur,.clue.tiny .row.loc{display:none;}
+  .clue.tiny .host{display:none;}
+  .clue.tiny .go{font-size:11px;padding:5px 0;margin-top:7px;}
+  .clue.tiny .tag{margin-bottom:4px;}
+
+  .clue .tag{
+    display:inline-block;font-size:10px;font-weight:700;letter-spacing:1px;
+    color:#fff;background:var(--accent,#c98a00);
+    padding:1px 7px;border-radius:9px;margin-bottom:5px;
+  }
+  .clue h5{font-size:13.5px;line-height:1.35;margin-bottom:7px;font-weight:700;}
+  .clue .rows{border-top:1px dashed rgba(0,0,0,.22);padding-top:7px;}
+  .clue .row{display:flex;gap:5px;align-items:flex-start;margin-bottom:2px;}
+  .clue .row i{font-style:normal;flex:none;width:16px;opacity:.75;}
+  .clue .row span{flex:1;}
+  .clue .row.fee span{font-weight:700;color:#1b7a4b;}
+  .clue .row.fee.pend span{color:#a35a00;}
+
+  .clue .links{
+    margin-top:8px;padding-top:7px;border-top:1px dashed rgba(0,0,0,.22);
+    display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+  }
+  .clue .links .lbl{font-size:10px;color:#8a7550;flex:none;}
+  .chip{
+    font-size:10.5px;text-decoration:none;color:#243b53;background:rgba(255,255,255,.72);
+    border:1px solid rgba(0,0,0,.16);border-radius:10px;padding:1px 8px;
+    display:inline-block;white-space:nowrap;cursor:pointer;transition:background .15s;
+  }
+  .chip:hover{background:#fff;}
+  .chip.mini{background:rgba(255,255,255,.55);border-style:dashed;}
+  .clue .host{font-size:10px;color:#8a7550;margin-top:6px;}
+
+  /* 查询交通按钮 */
+  .clue .go{
+    display:block;width:100%;margin-top:9px;padding:6px 0;
+    border:1px solid rgba(0,0,0,.22);border-radius:13px;
+    background:rgba(255,255,255,.78);color:#243b53;
+    font-size:12px;font-weight:700;letter-spacing:.5px;cursor:pointer;
+    transition:background .15s,transform .12s;
+  }
+  .clue .go:hover{background:#fff;transform:translateY(-1px);}
+
+  /* ===== 交通方案弹窗 ===== */
+  .modal{
+    position:fixed;inset:0;z-index:1500;display:none;
+    background:rgba(6,14,24,.55);backdrop-filter:blur(2px);
+    align-items:center;justify-content:center;
+  }
+  .modal.on{display:flex;}
+  .modal-card{
+    width:min(440px,92vw);max-height:78vh;overflow-y:auto;position:relative;
+    background:#12233a;border:1px solid #2b4766;border-radius:12px;
+    padding:18px 18px 14px;box-shadow:0 24px 50px rgba(0,0,0,.55);
+  }
+  .modal-card .close{
+    position:absolute;right:10px;top:8px;background:none;border:none;color:#7e96ae;
+    font-size:22px;line-height:1;cursor:pointer;
+  }
+  .modal-card .close:hover{color:#fff;}
+  .modal-card h3{font-size:15px;color:#ffd166;padding-right:24px;line-height:1.4;}
+  .modal-card .sub{font-size:11.5px;color:#8fa8c0;margin:6px 0 12px;line-height:1.5;}
+  .modal-card .sub b{color:#dfe9f3;font-weight:600;}
+
+  .mode{
+    background:#0e1c2e;border:1px solid #243c58;border-radius:9px;
+    padding:10px 12px;margin-bottom:8px;
+  }
+  .mode-h{display:flex;align-items:baseline;gap:8px;font-size:13px;}
+  .mode-h .ico{font-size:14px;}
+  .mode-h b{color:#e8f0f8;}
+  .mode-h .t{margin-left:auto;color:#7ee0b0;font-weight:700;font-size:13px;white-space:nowrap;}
+  .mode-d{font-size:11px;color:#8fa8c0;margin-top:4px;line-height:1.5;}
+  .mode-a{
+    display:inline-block;margin-top:7px;font-size:11.5px;color:#8ec5ff;text-decoration:none;
+    border-bottom:1px dashed rgba(142,197,255,.5);
+  }
+  .mode-a:hover{color:#bcdcff;}
+  .modal-foot{display:flex;gap:8px;margin-top:12px;}
+  .modal-foot button{
+    flex:1;padding:8px;border-radius:7px;border:1px solid #3a5a80;
+    background:transparent;color:#a9c4e0;font-size:12px;cursor:pointer;
+  }
+  .modal-foot button:hover{border-color:#8ec5ff;color:#fff;}
+  .modal-card .tip{font-size:10.5px;color:#6b8299;margin-top:10px;line-height:1.6;}
+
+  /* 底部三栏 */
+  .tabs{display:flex;height:28vh;}
+  .tab-nav{flex:none;width:150px;display:flex;flex-direction:column;}
+  .tab-nav button{flex:1;border:none;background:#13223a;color:#9ab;font-size:13.5px;
+    cursor:pointer;border-left:3px solid transparent;text-align:left;padding-left:14px;}
+  .tab-nav button.active{background:#1c3252;color:#fff;border-left-color:#4361ee;}
+  .tab-content{flex:1;overflow-y:auto;background:#1c3252;padding:16px;}
+  .item{background:#13223a;border-radius:8px;padding:10px 12px;margin-bottom:8px;
+        display:flex;justify-content:space-between;align-items:center;gap:12px;}
+  .item .t{font-size:13px;}
+  .item .s{font-size:11px;color:#8aa0b8;margin-top:3px;line-height:1.5;}
+  .item .s a{color:#8ec5ff;text-decoration:none;}
+  .pts{color:#ffd166;font-weight:bold;background:none;border:none;cursor:pointer;font-size:13px;flex:none;}
+  .empty{color:#5d7691;font-size:13px;}
+  .share-box{display:flex;gap:8px;margin-bottom:12px;}
+  .share-box input{flex:1;padding:8px 10px;border-radius:6px;border:1px solid #345;background:#0d1b2a;color:#eee;font-size:12.5px;}
+  .share-box button{padding:8px 14px;border:none;border-radius:6px;background:#4361ee;color:#fff;cursor:pointer;font-size:12.5px;}
+
+  /* 出发地标记 */
+  .origin-pin{
+    width:22px;height:22px;border-radius:50%;background:#4361ee;border:3px solid #fff;
+    box-shadow:0 0 0 3px rgba(67,97,238,.35),0 2px 6px rgba(0,0,0,.4);
+    display:flex;align-items:center;justify-content:center;font-size:10px;
+  }
+
+  /* 轻提示 */
+  #toast{
+    position:fixed;left:50%;bottom:12%;transform:translateX(-50%) translateY(20px);
+    background:rgba(13,27,42,.95);color:#ffd166;border:1px solid rgba(255,209,102,.4);
+    padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;
+    transition:.25s;z-index:2000;
+  }
+  #toast.on{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+
+<div class="main">
+  <!-- 出发地栏 -->
+  <div class="originbar">
+    <span class="ob-label">📍 出发地</span>
+    <input id="originInput" placeholder="输入住址或常去地点，如：海淀区紫竹桥 / 天通苑">
+    <button onclick="applyOrigin()">设为出发地</button>
+    <button class="ghostbtn" onclick="locateMe()">用当前位置</button>
+    <span id="originStatus" class="ob-status">未设置 · 设置后才能算交通</span>
+    <button class="share-btn" onclick="openShare()">📤 分享封面</button>
+  </div>
+
+  <div id="stage">
+    <div id="map"></div>
+    <div class="fog-layer"></div>
+    <div class="stage-head">
+      <b id="stageTitle">志远行 · 北京共学活动地图</b>
+      <span>顶部填「出发地」→ 点便利贴的「查询交通」= 步行 / 公交 / 打车三种方案</span>
+    </div>
+    <svg id="wire"></svg>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab-nav">
+    <button class="active" onclick="switchTab(0)">🏆 每周收获打卡</button>
+    <button onclick="switchTab(1)">💬 收获总结分享</button>
+    <button onclick="switchTab(2)">🛠 实践工坊</button>
+  </div>
+  <div class="tab-content" id="tab0"></div>
+  <div class="tab-content" id="tab1" style="display:none"></div>
+  <div class="tab-content" id="tab2" style="display:none"></div>
+</div>
+
+<!-- 交通方案弹窗 -->
+<div id="tmodal" class="modal" onclick="if(event.target===this)closeTraffic()">
+  <div class="modal-card">
+    <button class="close" onclick="closeTraffic()">×</button>
+    <h3 id="tmTitle">交通方案</h3>
+    <p class="sub" id="tmSub"></p>
+    <div id="tmBody"></div>
+    <div class="modal-foot">
+      <button onclick="drawRoute()">在地图上画路线</button>
+      <button onclick="clearRoute()">清除路线</button>
+    </div>
+    <p class="tip">
+      时间按城市平均速度估算（步行 4.8 km/h、公交 16 km/h、市区驾车 24 km/h，路网系数 1.35），
+      打车费按北京出租车估价（起步 13 元 / 3 km，之后约 2.3 元每公里）。
+      点「在高德查看」可打开实时公交、地铁换乘与真实路线。
+    </p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================================================================
+   ① 地图 → ② 数据 → ③ 渲染 → ④ 出发地 → ⑤ 交通方案
+   ================================================================ */
+
+/* ---------- ① 地图初始化 ---------- */
+/* 可选：填入天地图 key 后自动切换到天地图底图（不填则用免密钥的高德底图） */
+const TDT_KEY = "3dc2be715a8be693db753a0a75b74748";
+
+const map = L.map("map", { center:[39.9042,116.4074], zoom:11 });
+
+/* 坐标系：天地图底图用 WGS84，高德底图用 GCJ-02 —— 按底图自动转换，避免点位偏 300–500 米 */
+const USE_GCJ = !TDT_KEY;
+function toMapLL(lat, lng){ return USE_GCJ ? wgs2gcj(lat, lng) : [lat, lng]; }    // 外部 WGS → 底图
+function fromMapLL(lat, lng){ return USE_GCJ ? gcj2wgs(lat, lng) : [lat, lng]; }  // 底图 → 外部 WGS
+function toGcjLL(lat, lng){ return USE_GCJ ? [lat, lng] : wgs2gcj(lat, lng); }    // 底图 → 高德 GCJ
+
+if(TDT_KEY){
+  L.tileLayer(`https://t{s}.tianditu.gov.cn/vec_w/wmts?layer=vec&style=default&tilematrixset=w&Service=WMTS&Request=GetTile&Version=1.0.0&Format=tiles&TileMatrix={z}&TileMatrixSet=w&TileRow={y}&TileCol={x}&tk=${TDT_KEY}`, {
+    subdomains:["0","1","2","3","4","5","6","7"], maxZoom:18, attribution:"© 天地图"
+  }).addTo(map);
+  L.tileLayer(`https://t{s}.tianditu.gov.cn/cva_w/wmts?layer=cva&style=default&tilematrixset=w&Service=WMTS&Request=GetTile&Version=1.0.0&Format=tiles&TileMatrix={z}&TileMatrixSet=w&TileRow={y}&TileCol={x}&tk=${TDT_KEY}`, {
+    subdomains:["0","1","2","3","4","5","6","7"]
+  }).addTo(map);
+}else{
+  L.tileLayer("https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}", {
+    subdomains:["1","2","3","4"], maxZoom:18, attribution:"© 高德地图"
+  }).addTo(map);
+}
+
+/* ---------- ② 唯一一份数据 ---------- */
+const COLORS = {charity:"#e0a020", explore:"#2f9e6e", workshop:"#7c6df2"};
+const NOTE   = {charity:"#fff3b0", explore:"#d8f3dc", workshop:"#e5dbff"};
+const TAG    = {charity:"公益",   explore:"探索",    workshop:"工坊"};
+
+const LINK_HUDONG_H5   = "https://h5-party-jfy77.hudongba.com/party/jfy77.html?inviteCode=ED93531CCDF039EDCC621B22FF01EBBD";
+const LINK_HUDONG_MINI = "#小程序://互动吧/Y33bi3lZpzayIwf";
+const LINK_WX          = "https://mp.weixin.qq.com/s/2Se1YWpCiyOVRAe1vBD0nQ";
+
+/* 坐标为地点大致位置，仅用于地图示意 */
 const activities = [
   {
     "id": "act1",
@@ -378,7 +389,7 @@ const activities = [
     "fee": "单人¥128(单日票)-176（…",
     "feePending": false,
     "feeNote": "单人¥128(单日票)-176（双日票） 双人¥176（单日票）-316（双日票） 如果参加与200位Ai创业者的晚上同场交流活动则购买双日票¥1680",
-    "note": "活动场次比价多，可以看微信公众号以及一会制作的的日程分享决定参加什么活动。因为同一时段有多场平行活动，参加的小伙伴可以在群里分享活动的现场体验，帮助其他场次的小伙伴决定要不要到另一侧去；21日为Ai创业者主题活动（含创业者交流）；22日活动为创业群体对于科技生活场景拓宽的讨论",
+    "note": "21日为Ai创业者主题活动（含创业者交流）；22日活动为创业群体对于科技生活场景拓宽的讨论；活动场次比价多，可以看微信公众号以及一会制作的的日程分享决定参加什么活动。因为同一时段有多场平行活动，参加的小伙伴可以在群里分享活动的现场体验，帮助其他场次的小伙伴决定要不要到另一侧去",
     "host": "虎嗅F&M创新节",
     "lat": 39.9843,
     "lng": 116.4956,
@@ -399,8 +410,8 @@ const activities = [
     "duration": "约 6 小时",
     "fee": "¥198",
     "feePending": false,
-    "feeNote": "",
-    "note": "",
+    "feeNote": "¥198元（一大一小）",
+    "note": "周末营自然科普/弹棉花/制作小绵羊肖恩灯笼/制作棉花糖",
     "host": "工坊 · 志远行整理",
     "lat": 39.6336,
     "lng": 116.4331,
@@ -415,17 +426,17 @@ const activities = [
     "id": "act3",
     "name": "北京昌平甘蔗采摘游",
     "type": "workshop",
-    "place": "北京昌平​昌平鑫城缘农场",
+    "place": "北京昌平昌平鑫城缘农场",
     "date": "11-21",
     "time": "09:00 – 16:00",
     "duration": "约 7 小时",
-    "fee": "¥99 – 2",
+    "fee": "¥99",
     "feePending": false,
     "feeNote": "¥99元（2大一小）",
-    "note": "",
+    "note": "周末在甘蔗林采甘蔗2根，在红薯地挖红薯3斤，吃爆米花1份，赏多肉种植园选多肉1盆，并且和乡村动物园的小动物玩耍",
     "host": "工坊 · 志远行整理",
-    "lat": 40.22,
-    "lng": 116.231,
+    "lat": 40.208,
+    "lng": 116.36,
     "links": [
       {
         "label": "报名链接",
@@ -450,895 +461,895 @@ const activities = [
     "lng": 116.466,
     "links": []
   }
-];
-
-const markers = {};
-const clueEls = {};
-let state = { checkin:{}, shares:[] };
-let fitted = false;
-
-/* 出发地 */
-let ORIGIN = null;              // {lat,lng,name}
-let originLayer = null;
-let routeLayer  = null;
-let trafficTarget = null;       // 当前查询的活动
-
-/* ---------- ③ 渲染：marker + 便利贴 ---------- */
-const wire  = document.getElementById("wire");
-const stage = document.getElementById("stage");
-
-function popupHTML(a){
-  const links = a.links.map(l=> l.url.startsWith("http")
-      ? `<a href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`
-      : `<span title="${l.url}">${l.label}：${l.url}</span>`).join("<br>");
-  const feeNote = a.feeNote ? `<br><span style="color:#8a6d3b">票价：${a.feeNote}</span>` : "";
-  const note = a.note ? `<br><span style="color:#666">📝 ${a.note}</span>` : "";
-  return `<b>${a.name}</b><br>
-    🗓 ${a.date} ${a.time}（${a.duration}）<br>
-    📍 ${a.place}<br>
-    💰 ${a.fee}${feeNote}<br>
-    报名：${links || "见主办方页面"}${note}`;
-}
-
-function renderAll(){
-  Object.values(markers).forEach(m=>map.removeLayer(m));
-  Object.keys(markers).forEach(k=>delete markers[k]);
-  document.querySelectorAll(".clue").forEach(e=>e.remove());
-  Object.keys(clueEls).forEach(k=>delete clueEls[k]);
-
-  activities.forEach((a, idx)=>{
-    const m = L.circleMarker([a.lat,a.lng], {
-      radius:8, color:COLORS[a.type], fillColor:COLORS[a.type],
-      fillOpacity:.9, weight:2
-    }).addTo(map).bindPopup(popupHTML(a), {maxWidth:300});
-    m.on("click", ()=>highlight(a.id,false));
-    markers[a.id]=m;
-
-    const side = idx % 2 === 0 ? "left" : "right";
-    const el = document.createElement("div");
-    el.className = `clue ${side}`;
-    el.id = `clue-${a.id}`;
-    el.style.setProperty("--note", NOTE[a.type]);
-    el.style.setProperty("--accent", COLORS[a.type]);
-    el.style.setProperty("--tilt", (idx % 2 === 0 ? -1.6 : 1.4) + "deg");
-
-    const chips = a.links.map(l=> l.url.startsWith("http")
-      ? `<a class="chip" href="${l.url}" target="_blank" rel="noopener" title="${l.url}">${l.label}</a>`
-      : `<span class="chip mini" data-copy="${l.url}" title="点击复制：${l.url}">${l.label}</span>`).join("");
-
-    el.innerHTML = `
-      <div class="tag">${TAG[a.type]}</div>
-      <h5>${a.name}</h5>
-      <div class="rows">
-        <div class="row"><i>🗓</i><span>${a.date} ${a.time}</span></div>
-        <div class="row dur"><i>⏳</i><span>时长：${a.duration}</span></div>
-        <div class="row loc"><i>📍</i><span>${a.place}</span></div>
-        <div class="row fee ${a.feePending?'pend':''}"><i>💰</i><span>${a.fee}</span></div>
-      </div>
-      ${a.links.length ? `<div class="links"><span class="lbl">报名</span>${chips}</div>` : ""}
-      <button class="go" data-go="1">🚦 查询交通</button>
-      <div class="host">${a.host}</div>`;
-
-    el.querySelectorAll("a").forEach(x=>x.addEventListener("click", e=>e.stopPropagation()));
-    el.querySelectorAll("[data-copy]").forEach(x=>x.addEventListener("click", e=>{
-      e.stopPropagation();
-      copyText(x.getAttribute("data-copy"));
-    }));
-    el.querySelector("[data-go]").addEventListener("click", e=>{
-      e.stopPropagation();
-      openTraffic(a.id);
-    });
-    el.addEventListener("click", ()=>highlight(a.id,true));
-    el.addEventListener("mouseenter", ()=>highlight(a.id,false));
-
-    stage.appendChild(el);
-    clueEls[a.id] = {el, side};
-  });
-
-  if(!fitted && activities.length){
-    fitted = true;
-    setTimeout(()=>{
-      const padX = Math.min(300, Math.max(90, stage.clientWidth * 0.20));
-      map.fitBounds(L.latLngBounds(activities.map(a=>[a.lat,a.lng])), {
-        paddingTopLeft:[padX, 80], paddingBottomRight:[padX, 80], maxZoom:12
-      });
-    }, 60);
-  }
-
-  relayout();
-  renderTabs();
-}
-
-/* ---------- ④ 连线布局 ---------- */
-let rafId = null;
-function relayout(){
-  const W = stage.clientWidth, H = stage.clientHeight;
-  if(!W || !H) return;
-  wire.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  wire.innerHTML = "";
-
-  const perCol = {left:0, right:0};
-  activities.forEach(a=>{ const c = clueEls[a.id]; if(c) perCol[c.side]++; });
-  const maxPer = Math.max(perCol.left, perCol.right);
-  const level = maxPer >= 4 ? "tiny" : (maxPer >= 3 ? "small" : "");
-  document.querySelectorAll(".clue").forEach(el=>{
-    el.classList.toggle("small", level === "small");
-    el.classList.toggle("tiny",  level === "tiny");
-  });
-  const cardW = level === "tiny" ? 200 : (level === "small" ? 212 : 238);
-  const halfW = cardW / 2 + 6;
-  const cxMap = {
-    left : Math.max(halfW + 16, W * 0.135),
-    right: Math.min(W - halfW - 16, W * 0.865)
-  };
-
-  ["left","right"].forEach(side=>{
-    const list = activities.filter(a=>clueEls[a.id] && clueEls[a.id].side===side)
-                           .sort((a,b)=>b.lat-a.lat);
-    const n = list.length;
-    if(!n) return;
-    list.forEach((a,i)=>{
-      const cx = cxMap[side];
-      const cy = (i+0.5) * H / n;
-      clueEls[a.id].el.style.left = cx+"px";
-      clueEls[a.id].el.style.top  = cy+"px";
-
-      const pt = map.latLngToContainerPoint([a.lat,a.lng]);
-      const sx = side==="left" ? cx + halfW : cx - halfW;
-      const mx = (sx + pt.x) / 2;
-      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
-      path.setAttribute("d", `M ${sx} ${cy} C ${mx} ${cy}, ${mx} ${pt.y}, ${pt.x} ${pt.y}`);
-      path.setAttribute("stroke", COLORS[a.type]);
-      path.dataset.aid = a.id;
-      wire.appendChild(path);
-    });
-  });
-}
-
-["move","zoom","moveend","zoomend","viewreset","resize"].forEach(ev=>
-  map.on(ev, ()=>{ cancelAnimationFrame(rafId); rafId = requestAnimationFrame(relayout); })
-);
-window.addEventListener("resize", relayout);
-
-/* ---------- ⑤ 高亮联动 ---------- */
-function highlight(id, fly){
-  document.querySelectorAll(".clue").forEach(e=>e.classList.remove("hot"));
-  if(clueEls[id]) clueEls[id].el.classList.add("hot");
-  wire.querySelectorAll("path").forEach(p=>p.classList.toggle("hot", p.dataset.aid==id));
-  const a = activities.find(x=>x.id==id);
-  if(!a) return;
-  if(fly){
-    map.flyTo([a.lat,a.lng], Math.max(map.getZoom(),12), {duration:.6});
-    markers[id] && markers[id].openPopup();
-  }
-}
-
-/* ---------- ⑥ 坐标系转换 ---------- */
-/* WGS84 → GCJ-02（让 OSM / 路径服务的结果贴合高德底图） */
-function wgs2gcj(lat, lng){
-  const PI = Math.PI, a = 6378245.0, ee = 0.00669342162296594323;
-  if(lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lat, lng];
-  const dLat = (x, y)=>{
-    let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
-    r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
-    r += (20*Math.sin(y*PI) + 40*Math.sin(y/3*PI)) * 2/3;
-    r += (160*Math.sin(y/12*PI) + 320*Math.sin(y*PI/30)) * 2/3;
-    return r;
-  };
-  const dLng = (x, y)=>{
-    let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
-    r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
-    r += (20*Math.sin(x*PI) + 40*Math.sin(x/3*PI)) * 2/3;
-    r += (150*Math.sin(x/12*PI) + 300*Math.sin(x/30*PI)) * 2/3;
-    return r;
-  };
-  let dlat = dLat(lng-105, lat-35), dlng = dLng(lng-105, lat-35);
-  const radlat = lat/180*PI;
-  let magic = Math.sin(radlat); magic = 1 - ee*magic*magic;
-  const sq = Math.sqrt(magic);
-  dlat = (dlat*180) / ((a*(1-ee)) / (magic*sq) * PI);
-  dlng = (dlng*180) / (a / sq * Math.cos(radlat) * PI);
-  return [lat + dlat, lng + dlng];
-}
-
-/* GCJ-02 → WGS84（迭代逼近） */
-function gcj2wgs(lat, lng){
-  let wlat = lat, wlng = lng;
-  for(let i=0;i<3;i++){
-    const g = wgs2gcj(wlat, wlng);
-    wlat += lat - g[0];
-    wlng += lng - g[1];
-  }
-  return [wlat, wlng];
-}
-
-/* ---------- ⑦ 地理编码 ---------- */
-async function geocode(place){
-  if(TDT_KEY){
-    const url = "https://api.tianditu.gov.cn/geocoder?ds=" +
-                encodeURIComponent(JSON.stringify({keyWord: place})) + "&tk=" + TDT_KEY;
-    const res = await fetch(url).then(r=>r.json());
-    if(res.location) return [parseFloat(res.location.lat), parseFloat(res.location.lon)];
-    throw new Error("未找到该地点");
-  }
-  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-CN&q=" +
-              encodeURIComponent(place);
-  const arr = await fetch(url, {headers:{Accept:"application/json"}}).then(r=>r.json());
-  if(!arr.length) throw new Error("未找到该地点");
-  return toMapLL(parseFloat(arr[0].lat), parseFloat(arr[0].lon));
-}
-
-/* ---------- ⑧ 出发地 ---------- */
-function setOrigin(lat, lng, name){
-  ORIGIN = {lat, lng, name};
-  if(originLayer){ map.removeLayer(originLayer); }
-  originLayer = L.marker([lat,lng], {
-    icon: L.divIcon({className:"", html:'<div class="origin-pin">🏠</div>', iconSize:[22,22], iconAnchor:[11,11]})
-  }).addTo(map).bindPopup(`<b>出发地</b><br>${name}`);
-  const st = document.getElementById("originStatus");
-  st.textContent = "已设置：" + name;
-  st.classList.add("ok");
-  try{ localStorage.setItem("dsh_origin", JSON.stringify(ORIGIN)); }catch(e){}
-  clearRoute();
-  if(trafficTarget) openTraffic(trafficTarget.id, true);
-}
-
-async function applyOrigin(){
-  const v = document.getElementById("originInput").value.trim();
-  if(!v) return toast("请先输入住址或地点");
-  toast("正在定位「" + v + "」…");
-  try{
-    const [lat,lng] = await geocode(v);
-    setOrigin(lat, lng, v);
-    map.setView([lat,lng], Math.max(map.getZoom(), 12));
-    toast("出发地已设为：" + v);
-  }catch(e){
-    toast("没找到这个地址，试试加上「北京市」或换成附近地标");
-  }
-}
-
-function locateMe(){
-  if(!navigator.geolocation) return toast("当前浏览器不支持定位");
-  toast("正在获取当前位置…");
-  navigator.geolocation.getCurrentPosition(p=>{
-    const [lat,lng] = toMapLL(p.coords.latitude, p.coords.longitude);
-    setOrigin(lat, lng, "我的当前位置");
-    document.getElementById("originInput").value = "我的当前位置";
-    map.setView([lat,lng], Math.max(map.getZoom(), 13));
-  }, err=>{
-    toast("定位失败（" + (err.message || "权限被拒绝") + "），可直接输入住址");
-  }, {enableHighAccuracy:true, timeout:8000});
-}
-
-/* ---------- ⑨ 交通方案 ---------- */
-const SPEED = { walk:4.8, bus:16, car:24 };   // km/h
-const ROAD_FACTOR = 1.35;                     // 路网 / 直线
-
-function distanceKm(a, b){
-  const R = 6371, toRad = d=>d*Math.PI/180;
-  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
-  const s = Math.sin(dLat/2)**2 +
-            Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng/2)**2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
-function fmtMin(m){
-  m = Math.max(1, Math.round(m));
-  if(m < 60) return m + " 分钟";
-  const h = Math.floor(m/60), r = m % 60;
-  return h + " 小时" + (r ? " " + r + " 分" : "");
-}
-function fmtKm(km){ return km < 1 ? Math.round(km*1000) + " 米" : km.toFixed(1) + " km"; }
-
-/* 高德 URI：真实路线 / 实时公交 */
-function amapURL(a, mode){
-  const [olat,olng] = toGcjLL(ORIGIN.lat, ORIGIN.lng);
-  const [tlat,tlng] = toGcjLL(a.lat, a.lng);
-  const from = `from=${olng},${olat},${encodeURIComponent(ORIGIN.name)}`;
-  const to   = `to=${tlng},${tlat},${encodeURIComponent(a.name)}`;
-  return `https://uri.amap.com/navigation?${from}&${to}&mode=${mode}&policy=1&src=dsh-cluewall&callnative=1`;
-}
-
-function openTraffic(id, silent){
-  const a = activities.find(x=>x.id==id);
-  if(!a) return;
-  if(!ORIGIN){
-    if(!silent){
-      toast("请先在顶部设置「出发地」");
-      document.getElementById("originInput").focus();
-    }
-    return;
-  }
-  trafficTarget = a;
-
-  const straight = distanceKm(ORIGIN, a);
-  const road = straight * ROAD_FACTOR;
-  const walk = road / SPEED.walk * 60;
-  const bus  = road / SPEED.bus * 60 + 8;
-  const car  = road / SPEED.car * 60 + 3;
-  const fare = 13 + Math.max(0, road - 3) * 2.3;
-
-  document.getElementById("tmTitle").textContent = "🚦 " + a.name;
-  document.getElementById("tmSub").innerHTML =
-    `<b>${ORIGIN.name}</b> → <b>${a.date} ${a.time}</b><br>` +
-    `直线 ${fmtKm(straight)} · 按路网约 ${fmtKm(road)}`;
-
-  const rows = [];
-  if(walk <= 150){
-    rows.push(modeRow("🚶","步行", fmtMin(walk), `${fmtKm(road)} · 按 4.8 km/h 估算`, amapURL(a,"walk")));
-  }
-  rows.push(modeRow("🚌","公交 / 地铁", fmtMin(bus),
-    `${fmtKm(road)} · 含约 8 分钟候车换乘，实时路线见高德`, amapURL(a,"bus")));
-  rows.push(modeRow("🚗","开车 / 打车", fmtMin(car),
-    `${fmtKm(road)} · 打车约 ${Math.round(fare)} 元（北京估价）`, amapURL(a,"car")));
-
-  document.getElementById("tmBody").innerHTML = rows.join("");
-  document.getElementById("tmodal").classList.add("on");
-  clearRoute();
-}
-
-function modeRow(ico, name, time, desc, url){
-  return `<div class="mode">
-    <div class="mode-h"><span class="ico">${ico}</span><b>${name}</b><span class="t">${time}</span></div>
-    <div class="mode-d">${desc}</div>
-    <a class="mode-a" href="${url}" target="_blank" rel="noopener">在高德查看${name}路线 ↗</a>
-  </div>`;
-}
-
-function closeTraffic(){ document.getElementById("tmodal").classList.remove("on"); }
-
-/* 真实路网路线：OSRM 公共实例（免密钥，失败则保持估算） */
-async function fetchRoute(a, profile){
-  const [olat,olng] = fromMapLL(ORIGIN.lat, ORIGIN.lng);
-  const [dlat,dlng] = fromMapLL(a.lat, a.lng);
-  const base = profile === "foot"
-    ? "https://routing.openstreetmap.de/routed-foot/route/v1/driving/"
-    : "https://routing.openstreetmap.de/routed-car/route/v1/driving/";
-  const url = `${base}${olng},${olat};${dlng},${dlat}?overview=full&geometries=geojson`;
-  const opt = (typeof AbortSignal !== "undefined" && AbortSignal.timeout)
-    ? {signal: AbortSignal.timeout(8000)} : {};
-  const r = await fetch(url, opt).then(x=>x.json());
-  if(!r.routes || !r.routes.length) throw new Error("no route");
-  return r.routes[0];
-}
-
-let lastRoute = null;
-async function drawRoute(){
-  if(!ORIGIN || !trafficTarget) return toast("请先设置出发地和活动");
-  const a = trafficTarget;
-  toast("正在规划真实路线…");
-  try{
-    lastRoute = await fetchRoute(a, "car");
-    const pts = lastRoute.geometry.coordinates.map(([lng,lat])=>toMapLL(lat,lng));
-    clearRoute();
-    routeLayer = L.layerGroup([
-      L.polyline(pts, {color:"#4361ee", weight:5, opacity:.85}),
-      L.polyline(pts, {color:"#8ec5ff", weight:2, opacity:.9, dashArray:"8 8"})
-    ]).addTo(map);
-    map.fitBounds(routeLayer.getLayers()[0].getBounds(), {padding:[60,60]});
-    const km = (lastRoute.distance/1000).toFixed(1);
-    const min = Math.round(lastRoute.duration/60);
-    toast(`路网 ${km} km · 驾车约 ${min} 分钟`);
-  }catch(e){
-    toast("在线路网服务不可用，已保留估算：可点「在高德查看」看真实路线");
-  }
-}
-
-function clearRoute(){
-  if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
-  lastRoute = null;
-}
-
-/* ---------- ⑩ 底部三栏 ---------- */
-function switchTab(i){
-  [0,1,2].forEach(n=>document.getElementById("tab"+n).style.display = n===i?"block":"none");
-  document.querySelectorAll(".tab-nav button").forEach((b,n)=>b.classList.toggle("active",n===i));
-}
-function infoLine(a){
-  const l = a.links.filter(x=>x.url.startsWith("http"))[0];
-  return `${a.date} ${a.time} · 时长 ${a.duration} · 💰 ${a.fee}` +
-         (l ? ` · <a href="${l.url}" target="_blank" rel="noopener">报名入口 ↗</a>` : "");
-}
-function renderTabs(){
-  const week = activities.filter(a=>a.type!=="workshop");
-  const done = Object.keys(state.checkin).length;
-  document.getElementById("tab0").innerHTML = week.length
-    ? `<p style="color:#8aa0b8;font-size:12px;margin-bottom:10px">已打卡 ${done} 场 ｜ 共 ${week.length} 场可打卡活动</p>` +
-      week.map(a=>`
-      <div class="item">
-        <div>
-          <div class="t">【${TAG[a.type]}】${a.name}</div>
-          <div class="s">${infoLine(a)}</div>
-        </div>
-        <button class="pts" onclick="checkin('${a.id}')">${state.checkin[a.id]?"✓ 已打卡":"打卡 +1"}</button>
-      </div>`).join("")
-    : "<p class='empty'>本周暂无慈善/探索活动</p>";
-
-  document.getElementById("tab1").innerHTML =
-    `<div class="share-box">
-       <input id="shareInput" placeholder="写下这次活动的收获…" onkeydown="if(event.key==='Enter')postShare()">
-       <button onclick="postShare()">发布</button>
-     </div>` +
-    (state.shares.map((s,i)=>`
-      <div class="item"><span>${s.text}</span>
-        <button class="pts" onclick="likeShare(${i})">👍 ${s.likes}</button></div>`).join("") ||
-     "<p class='empty'>还没有人分享，来做第一个吧</p>");
-
-  const shop = activities.filter(a=>a.type==="workshop");
-  document.getElementById("tab2").innerHTML = shop.length
-    ? shop.map(a=>`
-      <div class="item">
-        <div>
-          <div class="t">【工坊】${a.name}</div>
-          <div class="s">${a.date} ${a.time} · 时长 ${a.duration} · 📍${a.place} · 💰 ${a.fee}</div>
-        </div>
-        <button class="pts" onclick="openTraffic('${a.id}')">查询交通</button>
-      </div>`).join("")
-    : "<p class='empty'>本周暂无实践工坊</p>";
-}
-function checkin(id){ state.checkin[id]=true; renderTabs(); }
-function likeShare(i){ state.shares[i].likes++; renderTabs(); }
-function postShare(){
-  const el = document.getElementById("shareInput");
-  const text = el.value.trim();
-  if(!text) return;
-  state.shares.unshift({text, likes:0});
-  renderTabs();
-}
-
-/* ---------- ⑪ 复制 + 轻提示 ---------- */
-function toast(msg){
-  const t = document.getElementById("toast");
-  t.textContent = msg; t.classList.add("on");
-  clearTimeout(toast.timer);
-  toast.timer = setTimeout(()=>t.classList.remove("on"), 2600);
-}
-async function copyText(text){
-  try{
-    await navigator.clipboard.writeText(text);
-    toast("已复制：" + text);
-  }catch(e){
-    toast("请手动复制：" + text);
-  }
-}
-
-/* ---------- ⑫ 一键分享：微信封面卡 ---------- */
-const SHARE_TITLE = "志远行 · 北京共学活动地图";
-/* 日期与文案：全部由 activities 推导，以后改活动不用动这里 */
-function fmtDate(d){ const p = String(d).split("-"); return p[1] ? p[0] + "." + p[1] : String(d); }
-function dateRange(){
-  const ds = [...new Set(activities.map(a=>a.date).filter(Boolean))].sort();
-  if(!ds.length) return "本周";
-  const a = fmtDate(ds[0]), b = fmtDate(ds[ds.length-1]);
-  return a === b ? a : a + " – " + b;
-}
-function weekLine(){
-  return `${dateRange()} ｜ 公益 / 探索 / 工坊 ${activities.length} 场活动`;
-}
-function shareDesc(){
-  const n = activities.length;
-  const first = activities[0] ? String(activities[0].name).split("·")[0].trim() : "";
-  return `${dateRange()} 北京 ${n} 场活动${first ? "：首场 " + first : ""}，时间 / 收费 / 报名入口见图`;
-}
-function syncHead(){
-  const t = document.getElementById("stageTitle");
-  if(t) t.textContent = dateRange() + " · 志远行北京共学活动地图";
-  document.title = dateRange() + " · 志远行共学活动地图";
-}
-syncHead();
-const FONT_SC = "'PingFang SC','Microsoft YaHei',sans-serif";
-
-const COVER   = {W:1080, H:1350};
-const MAP_BOX = {x:56, y:236, w:968, h:776};
-const GEO     = {lat0:39.72, lat1:40.10, lng0:116.24, lng1:116.58};
-const COVER_MAX_CARDS = 4;
-function buildCardBoxes(list){
-  const shown = Math.min(list.length, COVER_MAX_CARDS);
-  const boxes = [];
-  const h = 232, gapY = 26;
-  const rows = Math.ceil(shown / 2);
-  const totalH = rows * h + (rows - 1) * gapY;
-  const y0 = MAP_BOX.y + (MAP_BOX.h - totalH) / 2 + 6;
-  for(let i=0;i<shown;i++){
-    const r = Math.floor(i/2), isLeft = i % 2 === 0;
-    const x = shown === 1 ? (1080 - 326) / 2 : (isLeft ? 84 : 674);
-    boxes.push({x, y: y0 + r*(h+gapY), w:326, h, act:list[i]});
-  }
-  return boxes;
-}
-
-let shareCanvas = null, shareSeq = 0, lastQR = "";
-
-/* --- 弹窗骨架 --- */
-(function injectShareModal(){
-  const el = document.createElement("div");
-  el.id = "smodal";
-  el.className = "smodal";
-  el.innerHTML = `
-    <div class="scard">
-      <button class="sclose" onclick="closeShare()">×</button>
-      <h3>📤 分享到微信</h3>
-      <p class="sdesc">下面是生成好的分享卡片：标题 + 封面图 + 链接。
-        封面按当前三场活动和真实经纬度画出来，可保存发朋友圈、做公众号封面或群卡片图。</p>
-      <div class="wxs">
-        <div class="wxs-head"><span class="wxs-av">志</span><span>志远行</span></div>
-        <div class="wxs-title">志远行 · 北京共学活动地图</div>
-        <img id="sThumb" class="wxs-thumb" alt="微信卡片缩略图">
-        <div class="wxs-tag">🔗 点此查看本周活动地图</div>
-      </div>
-      <label class="slab">封面图 · 1080 × 1350（点击保存）</label>
-      <img id="sPreview" class="sprev" alt="封面预览">
-      <label class="slab">分享链接（部署后的网址，用于生成二维码）</label>
-      <input id="sLink" placeholder="https://…（不填也能出图，只是没有二维码）" onchange="renderShare()">
-      <p id="sLinkTip" class="stip2"></p>
-      <div class="sbtns">
-        <button onclick="downloadCover()">⬇ 保存封面图</button>
-        <button onclick="copyShareText()">📋 复制分享文案</button>
-        <button onclick="copyShareLink()">🔗 只复制链接</button>
-        <button class="ghost2" onclick="renderShare()">↻ 重新生成</button>
-      </div>
-    </div>`;
-  el.addEventListener("click", e=>{ if(e.target === el) closeShare(); });
-  document.body.appendChild(el);
-})();
-
-function openShare(){
-  document.getElementById("smodal").classList.add("on");
-  const inp = document.getElementById("sLink");
-  if(!inp.value && /^https?:/i.test(location.href)) inp.value = location.href;
-  renderShare();
-}
-function closeShare(){ document.getElementById("smodal").classList.remove("on"); }
-
-async function renderShare(){
-  const seq = ++shareSeq;
-  const link = (document.getElementById("sLink").value || "").trim();
-  const isWeb = /^https?:\/\//i.test(link);
-  const tip = document.getElementById("sLinkTip");
-  tip.textContent = isWeb
-    ? "✓ 二维码指向该链接，扫码或点开就能看到这张活动地图"
-    : "本地文件（file://）别人打不开：先部署到线上（公众号菜单 / 静态托管 / 内网），再把网址填进来生成二维码";
-  tip.className = "stip2" + (isWeb ? " ok2" : "");
-
-  const cv = await buildCover(isWeb ? link : "");
-  if(seq !== shareSeq) return;         // 旧的渲染结果丢弃
-  shareCanvas = cv;
-  const url = cv.toDataURL("image/png");
-  document.getElementById("sPreview").src = url;
-  document.getElementById("sThumb").src = url;
-}
-
-/* --- 绘图小工具 --- */
-function rr(g,x,y,w,h,r){
-  g.beginPath();
-  g.moveTo(x+r,y);
-  g.arcTo(x+w,y,x+w,y+h,r);
-  g.arcTo(x+w,y+h,x,y+h,r);
-  g.arcTo(x,y+h,x,y,r);
-  g.arcTo(x,y,x+w,y,r);
-  g.closePath();
-}
-function ellip(g, text, maxW){
-  if(g.measureText(text).width <= maxW) return text;
-  let t = text;
-  while(t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0,-1);
-  return t + "…";
-}
-function tokenize(text){
-  const out = [];
-  const re = /[A-Za-z0-9]+(?:[–—\-:.\/][A-Za-z0-9]+)*|\s+|[\s\S]/gu;
-  let m;
-  while((m = re.exec(text))){
-    out.push(/^\s+$/.test(m[0]) ? " " : m[0]);
-  }
-  return out;
-}
-function wrapText(g, text, maxW, maxLines){
-  const toks = tokenize(text), lines = [];
-  let cur = "";
-  for(let i=0;i<toks.length;i++){
-    const tok = toks[i];
-    if(cur === "" && tok === " ") continue;
-    if(g.measureText(cur + tok).width <= maxW){ cur += tok; continue; }
-
-    if(tok === " "){ lines.push(cur.replace(/\s+$/,"")); cur = ""; continue; }
-
-    if(cur === ""){                       // 单个词块就超宽 → 硬切
-      let piece = "";
-      for(const ch of tok){
-        if(g.measureText(piece + ch).width <= maxW) piece += ch;
-        else { lines.push(piece); piece = ch; }
-      }
-      cur = piece;
-      continue;
-    }
-
-    lines.push(cur.replace(/\s+$/,""));
-    cur = tok;
-    if(lines.length === maxLines - 1){    // 最后一行：剩余内容拼起来，超宽加省略号
-      const rest = (cur + toks.slice(i+1).join("")).replace(/\s+/g," ").trim();
-      let last = rest;
-      while(last && g.measureText(last + "…").width > maxW) last = last.slice(0,-1);
-      lines.push(last + (last.length < rest.length ? "…" : ""));
-      return lines;
-    }
-  }
-  if(cur.trim()) lines.push(cur.replace(/\s+$/,""));
-  return lines;
-}
-function proj(lat, lng){
-  const pad = 54;
-  const x = MAP_BOX.x + pad + (lng-GEO.lng0)/(GEO.lng1-GEO.lng0) * (MAP_BOX.w-2*pad);
-  const y = MAP_BOX.y + pad + (GEO.lat1-lat)/(GEO.lat1-GEO.lat0) * (MAP_BOX.h-2*pad);
-  return [x,y];
-}
-function cardAnchor(card, dot){
-  const cx = card.x + card.w/2, cy = card.y + card.h/2;
-  const dx = dot[0]-cx, dy = dot[1]-cy;
-  const L = Math.hypot(dx,dy) || 1;
-  const cands = [
-    {p:[card.x+card.w, cy], v:[1,0]},
-    {p:[card.x, cy],        v:[-1,0]},
-    {p:[cx, card.y],        v:[0,-1]},
-    {p:[cx, card.y+card.h], v:[0,1]}
-  ];
-  let best = cands[0], bs = -1e9;
-  for(const c of cands){
-    const s = (dx*c.v[0] + dy*c.v[1]) / L;
-    if(s > bs){ bs = s; best = c; }
-  }
-  return best.p;
-}
-
-/* --- 封面绘制 --- */
-function drawMapBase(g){
-  const {x,y,w,h} = MAP_BOX;
-  g.strokeStyle = "rgba(168,148,118,.20)"; g.lineWidth = 1;
-  for(let gx=x; gx<=x+w; gx+=64){ g.beginPath(); g.moveTo(gx,y); g.lineTo(gx,y+h); g.stroke(); }
-  for(let gy=y; gy<=y+h; gy+=64){ g.beginPath(); g.moveTo(x,gy); g.lineTo(x+w,gy); g.stroke(); }
-
-  const [cx,cy] = proj(39.9042,116.4074);
-  g.strokeStyle = "rgba(150,128,98,.42)"; g.lineWidth = 3;
-  [95,150,215].forEach(r=>{
-    g.beginPath(); g.ellipse(cx,cy,r*1.25,r,0,0,Math.PI*2); g.stroke();
-  });
-  g.strokeStyle = "rgba(150,128,98,.26)"; g.lineWidth = 4;
-  for(let a=0;a<8;a++){
-    const ang = a*Math.PI/4 + .21;
-    g.beginPath(); g.moveTo(cx,cy);
-    g.lineTo(cx+Math.cos(ang)*560, cy+Math.sin(ang)*520); g.stroke();
-  }
-
-  g.fillStyle = "rgba(120,100,75,.52)";
-  g.font = `400 20px ${FONT_SC}`;
-  g.fillText("昌平", 452, 300);
-  g.fillText("海淀", 128, 600);
-  g.fillText("城区", 596, 592);
-  g.fillText("亦庄", 862, 806);
-}
-function drawConnector(g, card, dot, color){
-  const [ax,ay] = cardAnchor(card, dot);
-  const mx = (ax + dot[0]) / 2;
-  g.save();
-  g.setLineDash([9,7]); g.lineWidth = 3; g.strokeStyle = color; g.globalAlpha = .75;
-  g.beginPath(); g.moveTo(ax,ay); g.quadraticCurveTo(mx, ay, dot[0], dot[1]); g.stroke();
-  g.restore();
-}
-function drawDot(g, dot, color){
-  g.beginPath(); g.arc(dot[0],dot[1],14,0,Math.PI*2); g.fillStyle = "rgba(255,255,255,.92)"; g.fill();
-  g.beginPath(); g.arc(dot[0],dot[1],9,0,Math.PI*2); g.fillStyle = color; g.fill();
-  g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
-}
-function fitTitle(g, text, maxW, maxLines){
-  for(const size of [22,21,20,19,18,17]){
-    g.font = `700 ${size}px ${FONT_SC}`;
-    const lines = wrapText(g, text, maxW, maxLines);
-    const last = lines[lines.length-1] || "";
-    const orphan = lines.length > 1 && g.measureText(last).width < maxW * 0.35;
-    if(!orphan) return {size, lines};
-  }
-  g.font = `700 17px ${FONT_SC}`;
-  return {size:17, lines: wrapText(g, text, maxW, maxLines)};
-}
-function drawCard(g, card, a){
-  const c = COLORS[a.type], note = NOTE[a.type];
-  const px = card.x + 26, innerW = card.w - 52;
-
-  g.save();
-  g.shadowColor = "rgba(60,45,20,.24)"; g.shadowBlur = 16; g.shadowOffsetY = 8;
-  rr(g, card.x, card.y, card.w, card.h, 10);
-  g.fillStyle = note; g.fill();
-  g.restore();
-
-  g.save();
-  rr(g, card.x, card.y, card.w, card.h, 10); g.clip();
-  g.fillStyle = c; g.fillRect(card.x, card.y, 8, card.h);
-  g.restore();
-
-  // 胶带
-  g.save();
-  g.translate(card.x + card.w/2, card.y); g.rotate(-0.035);
-  g.fillStyle = "rgba(255,255,255,.62)"; g.fillRect(-44,-9,88,18);
-  g.restore();
-
-  // 分类标签
-  g.font = `700 16px ${FONT_SC}`;
-  const tag = TAG[a.type];
-  const tw = g.measureText(tag).width + 20;
-  rr(g, px, card.y+18, tw, 24, 12); g.fillStyle = c; g.fill();
-  g.fillStyle = "#fff"; g.fillText(tag, px+10, card.y+22);
-
-  // 报名平台
-  g.font = `400 15px ${FONT_SC}`;
-  const src = ellip(g, (a.links[0] && a.links[0].label) || "", 120);
-  const sw = g.measureText(src).width + 16;
-  rr(g, card.x+card.w-26-sw, card.y+18, sw, 24, 12);
-  g.fillStyle = "rgba(255,255,255,.75)"; g.fill();
-  g.fillStyle = "#6a5a48"; g.fillText(src, card.x+card.w-26-sw+8, card.y+23);
-
-  // 标题（自动缩字号，避免最后一行只剩一两个字）
-  const fit = fitTitle(g, a.name, innerW, 3);
-  g.fillStyle = "#332a24";
-  g.font = `700 ${fit.size}px ${FONT_SC}`;
-  const lineH = Math.round(fit.size * 1.28);
-  fit.lines.forEach((ln,i)=> g.fillText(ln, px, card.y+54+i*lineH));
-
-  // 信息行（过长的自动折到第二行）
-  g.font = `400 18px ${FONT_SC}`;
-  g.fillStyle = "#4a3f35";
-  const rows = [
-    a.date + " " + a.time,
-    "时长 " + a.duration,
-    "收费 " + a.fee
-  ];
-  let ry = card.y + 54 + fit.lines.length*lineH + 8;
-  rows.forEach(t=>{
-    wrapText(g, t, innerW, 2).forEach(ln=>{
-      g.fillText(ln, px, ry);
-      ry += 26;
-    });
-  });
-}
-
-async function qrImage(text){
-  return new Promise(res=>{
-    if(typeof QRCode === "undefined" || !text) return res(null);
-    try{
-      QRCode.toDataURL(text, {margin:0, width:320, errorCorrectionLevel:"M",
-        color:{dark:"#12233a", light:"#ffffff"}}, (err,url)=>{
-        if(err || !url) return res(null);
-        const img = new Image();
-        img.onload = ()=> res(img);
-        img.onerror = ()=> res(null);
-        img.src = url;
-      });
-    }catch(e){ res(null); }
-  });
-}
-
-async function buildCover(qrLink){
-  const {W,H} = COVER;
-  const cv = document.createElement("canvas");
-  cv.width = W; cv.height = H;
-  const g = cv.getContext("2d");
-  g.textBaseline = "top";
-  if(qrLink !== lastQR){ lastQR = qrLink; }
-
-  const bg = g.createLinearGradient(0,0,W,H);
-  bg.addColorStop(0,"#0d1b2a"); bg.addColorStop(1,"#1b2d46");
-  g.fillStyle = bg; g.fillRect(0,0,W,H);
-
-  g.save();
-  g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 40; g.shadowOffsetY = 14;
-  rr(g,24,24,W-48,H-48,30); g.fillStyle = "#f8f3e6"; g.fill();
-  g.restore();
-
-  g.save();
-  rr(g,24,24,W-48,H-48,30); g.clip();
-  g.fillStyle = "rgba(190,175,150,.32)";
-  for(let y=52;y<H-30;y+=28) for(let x=52;x<W-30;x+=28) g.fillRect(x,y,1.6,1.6);
-  g.restore();
-
-  g.fillStyle = "#1b2a3a"; g.font = `700 52px ${FONT_SC}`;
-  g.fillText(SHARE_TITLE, 72, 84);
-  g.fillStyle = "#6a7a8c"; g.font = `400 25px ${FONT_SC}`;
-  g.fillText(weekLine(), 74, 156);
-  rr(g,72,202,132,7,3.5); g.fillStyle = "#e0a020"; g.fill();
-
-  // 地图面板
-  g.save();
-  rr(g,MAP_BOX.x,MAP_BOX.y,MAP_BOX.w,MAP_BOX.h,18);
-  g.fillStyle = "#efe6d3"; g.fill();
-  g.strokeStyle = "#d9cbaf"; g.lineWidth = 2; g.stroke();
-  g.clip();
-  drawMapBase(g);
-  const boxes = buildCardBoxes(activities);
-  boxes.forEach(b=> drawConnector(g, b, proj(b.act.lat, b.act.lng), COLORS[b.act.type]));
-  g.restore();
-
-  boxes.forEach(b=> drawCard(g, b, b.act));
-  activities.forEach(a=> drawDot(g, proj(a.lat,a.lng), COLORS[a.type]));
-
-  if(activities.length > COVER_MAX_CARDS){
-    const more = `另有 ${activities.length - COVER_MAX_CARDS} 场活动 · 详见地图页`;
-    g.font = `700 21px ${FONT_SC}`;
-    const tw = g.measureText(more).width + 44;
-    rr(g, 1024 - tw, MAP_BOX.y + MAP_BOX.h - 60, tw, 38, 19);
-    g.fillStyle = "rgba(27,42,58,.85)"; g.fill();
-    g.fillStyle = "#fff";
-    g.fillText(more, 1024 - tw + 22, MAP_BOX.y + MAP_BOX.h - 50);
-  }
-
-  // 页脚
-  g.strokeStyle = "rgba(200,186,160,.95)"; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(72,1032); g.lineTo(1008,1032); g.stroke();
-
-  const qr = qrLink ? await qrImage(qrLink) : null;
-  if(qr){
-    rr(g,72,1056,168,168,14); g.fillStyle = "#fff"; g.fill();
-    g.drawImage(qr,80,1064,152,152);
-  }else{
-    g.save(); g.setLineDash([9,7]); g.strokeStyle = "#cbbfa6"; g.lineWidth = 2;
-    rr(g,72,1056,168,168,14); g.stroke(); g.restore();
-    g.fillStyle = "#a89a80"; g.font = `400 18px ${FONT_SC}`;
-    g.fillText("二维码", 120, 1122);
-    g.fillText("待生成", 120, 1150);
-  }
-
-  const tx = 280;
-  g.fillStyle = "#1b2a3a"; g.font = `700 30px ${FONT_SC}`;
-  g.fillText(qr ? "扫码打开活动地图" : "分享链接未设置", tx, 1070);
-  g.fillStyle = "#6a7a8c"; g.font = `400 21px ${FONT_SC}`;
-  g.fillText("三场活动的时间、时长、收费与报名入口都在图里", tx, 1116);
-  g.font = `400 18px ${FONT_SC}`;
-  if(qrLink){
-    g.fillStyle = "#8d9aa8"; g.fillText(ellip(g, qrLink, 700), tx, 1156);
-  }else{
-    g.fillStyle = "#b07a3a";
-    g.fillText("把部署后的网址填进「分享链接」，二维码会自动生成", tx, 1156);
-  }
-
-  g.fillStyle = "#9aa7b4"; g.font = `400 19px ${FONT_SC}`;
-  g.fillText("志远行共学地图 · 每周更新", 72, 1268);
-  g.textAlign = "right";
-  g.fillText(dateRange() + " · BEIJING", 1008, 1268);
-  g.textAlign = "left";
-
-  return cv;
-}
-
-/* --- 保存 / 复制 --- */
-function downloadCover(){
-  if(!shareCanvas) return toast("封面还在生成…");
-  const a = document.createElement("a");
-  a.download = "志远行-北京共学活动地图-封面.png";
-  a.href = shareCanvas.toDataURL("image/png");
-  document.body.appendChild(a); a.click(); a.remove();
-  toast("封面已保存（1080×1350）");
-}
-function copyShareText(){
-  const link = (document.getElementById("sLink").value || "").trim();
-  copyText(`${SHARE_TITLE}\n${shareDesc()}\n${link || "（链接待补充）"}`);
-}
-function copyShareLink(){
-  const link = (document.getElementById("sLink").value || "").trim();
-  if(!link) return toast("还没有可复制的链接，先填一个线上网址");
-  copyText(link);
-}
-document.addEventListener("keydown", e=>{
-  if(e.key === "Escape"){ closeShare(); closeTraffic(); }
-});
-
-/* ---------- ⑫ 启动 ---------- */
-renderAll();
-
-/* 恢复上次设置的出发地 */
-try{
-  const saved = JSON.parse(localStorage.getItem("dsh_origin") || "null");
-  if(saved && saved.lat){
-    setOrigin(saved.lat, saved.lng, saved.name);
-    document.getElementById("originInput").value = saved.name;
-  }
-}catch(e){}
-</script>
-</body>
-</html>
+];
+
+const markers = {};
+const clueEls = {};
+let state = { checkin:{}, shares:[] };
+let fitted = false;
+
+/* 出发地 */
+let ORIGIN = null;              // {lat,lng,name}
+let originLayer = null;
+let routeLayer  = null;
+let trafficTarget = null;       // 当前查询的活动
+
+/* ---------- ③ 渲染：marker + 便利贴 ---------- */
+const wire  = document.getElementById("wire");
+const stage = document.getElementById("stage");
+
+function popupHTML(a){
+  const links = a.links.map(l=> l.url.startsWith("http")
+      ? `<a href="${l.url}" target="_blank" rel="noopener">${l.label}</a>`
+      : `<span title="${l.url}">${l.label}：${l.url}</span>`).join("<br>");
+  const feeNote = a.feeNote ? `<br><span style="color:#8a6d3b">票价：${a.feeNote}</span>` : "";
+  const note = a.note ? `<br><span style="color:#666">📝 ${a.note}</span>` : "";
+  return `<b>${a.name}</b><br>
+    🗓 ${a.date} ${a.time}（${a.duration}）<br>
+    📍 ${a.place}<br>
+    💰 ${a.fee}${feeNote}<br>
+    报名：${links || "见主办方页面"}${note}`;
+}
+
+function renderAll(){
+  Object.values(markers).forEach(m=>map.removeLayer(m));
+  Object.keys(markers).forEach(k=>delete markers[k]);
+  document.querySelectorAll(".clue").forEach(e=>e.remove());
+  Object.keys(clueEls).forEach(k=>delete clueEls[k]);
+
+  activities.forEach((a, idx)=>{
+    const m = L.circleMarker([a.lat,a.lng], {
+      radius:8, color:COLORS[a.type], fillColor:COLORS[a.type],
+      fillOpacity:.9, weight:2
+    }).addTo(map).bindPopup(popupHTML(a), {maxWidth:300});
+    m.on("click", ()=>highlight(a.id,false));
+    markers[a.id]=m;
+
+    const side = idx % 2 === 0 ? "left" : "right";
+    const el = document.createElement("div");
+    el.className = `clue ${side}`;
+    el.id = `clue-${a.id}`;
+    el.style.setProperty("--note", NOTE[a.type]);
+    el.style.setProperty("--accent", COLORS[a.type]);
+    el.style.setProperty("--tilt", (idx % 2 === 0 ? -1.6 : 1.4) + "deg");
+
+    const chips = a.links.map(l=> l.url.startsWith("http")
+      ? `<a class="chip" href="${l.url}" target="_blank" rel="noopener" title="${l.url}">${l.label}</a>`
+      : `<span class="chip mini" data-copy="${l.url}" title="点击复制：${l.url}">${l.label}</span>`).join("");
+
+    el.innerHTML = `
+      <div class="tag">${TAG[a.type]}</div>
+      <h5>${a.name}</h5>
+      <div class="rows">
+        <div class="row"><i>🗓</i><span>${a.date} ${a.time}</span></div>
+        <div class="row dur"><i>⏳</i><span>时长：${a.duration}</span></div>
+        <div class="row loc"><i>📍</i><span>${a.place}</span></div>
+        <div class="row fee ${a.feePending?'pend':''}"><i>💰</i><span>${a.fee}</span></div>
+      </div>
+      ${a.links.length ? `<div class="links"><span class="lbl">报名</span>${chips}</div>` : ""}
+      <button class="go" data-go="1">🚦 查询交通</button>
+      <div class="host">${a.host}</div>`;
+
+    el.querySelectorAll("a").forEach(x=>x.addEventListener("click", e=>e.stopPropagation()));
+    el.querySelectorAll("[data-copy]").forEach(x=>x.addEventListener("click", e=>{
+      e.stopPropagation();
+      copyText(x.getAttribute("data-copy"));
+    }));
+    el.querySelector("[data-go]").addEventListener("click", e=>{
+      e.stopPropagation();
+      openTraffic(a.id);
+    });
+    el.addEventListener("click", ()=>highlight(a.id,true));
+    el.addEventListener("mouseenter", ()=>highlight(a.id,false));
+
+    stage.appendChild(el);
+    clueEls[a.id] = {el, side};
+  });
+
+  if(!fitted && activities.length){
+    fitted = true;
+    setTimeout(()=>{
+      const padX = Math.min(300, Math.max(90, stage.clientWidth * 0.20));
+      map.fitBounds(L.latLngBounds(activities.map(a=>[a.lat,a.lng])), {
+        paddingTopLeft:[padX, 80], paddingBottomRight:[padX, 80], maxZoom:12
+      });
+    }, 60);
+  }
+
+  relayout();
+  renderTabs();
+}
+
+/* ---------- ④ 连线布局 ---------- */
+let rafId = null;
+function relayout(){
+  const W = stage.clientWidth, H = stage.clientHeight;
+  if(!W || !H) return;
+  wire.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  wire.innerHTML = "";
+
+  const perCol = {left:0, right:0};
+  activities.forEach(a=>{ const c = clueEls[a.id]; if(c) perCol[c.side]++; });
+  const maxPer = Math.max(perCol.left, perCol.right);
+  const level = maxPer >= 4 ? "tiny" : (maxPer >= 3 ? "small" : "");
+  document.querySelectorAll(".clue").forEach(el=>{
+    el.classList.toggle("small", level === "small");
+    el.classList.toggle("tiny",  level === "tiny");
+  });
+  const cardW = level === "tiny" ? 200 : (level === "small" ? 212 : 238);
+  const halfW = cardW / 2 + 6;
+  const cxMap = {
+    left : Math.max(halfW + 16, W * 0.135),
+    right: Math.min(W - halfW - 16, W * 0.865)
+  };
+
+  ["left","right"].forEach(side=>{
+    const list = activities.filter(a=>clueEls[a.id] && clueEls[a.id].side===side)
+                           .sort((a,b)=>b.lat-a.lat);
+    const n = list.length;
+    if(!n) return;
+    list.forEach((a,i)=>{
+      const cx = cxMap[side];
+      const cy = (i+0.5) * H / n;
+      clueEls[a.id].el.style.left = cx+"px";
+      clueEls[a.id].el.style.top  = cy+"px";
+
+      const pt = map.latLngToContainerPoint([a.lat,a.lng]);
+      const sx = side==="left" ? cx + halfW : cx - halfW;
+      const mx = (sx + pt.x) / 2;
+      const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+      path.setAttribute("d", `M ${sx} ${cy} C ${mx} ${cy}, ${mx} ${pt.y}, ${pt.x} ${pt.y}`);
+      path.setAttribute("stroke", COLORS[a.type]);
+      path.dataset.aid = a.id;
+      wire.appendChild(path);
+    });
+  });
+}
+
+["move","zoom","moveend","zoomend","viewreset","resize"].forEach(ev=>
+  map.on(ev, ()=>{ cancelAnimationFrame(rafId); rafId = requestAnimationFrame(relayout); })
+);
+window.addEventListener("resize", relayout);
+
+/* ---------- ⑤ 高亮联动 ---------- */
+function highlight(id, fly){
+  document.querySelectorAll(".clue").forEach(e=>e.classList.remove("hot"));
+  if(clueEls[id]) clueEls[id].el.classList.add("hot");
+  wire.querySelectorAll("path").forEach(p=>p.classList.toggle("hot", p.dataset.aid==id));
+  const a = activities.find(x=>x.id==id);
+  if(!a) return;
+  if(fly){
+    map.flyTo([a.lat,a.lng], Math.max(map.getZoom(),12), {duration:.6});
+    markers[id] && markers[id].openPopup();
+  }
+}
+
+/* ---------- ⑥ 坐标系转换 ---------- */
+/* WGS84 → GCJ-02（让 OSM / 路径服务的结果贴合高德底图） */
+function wgs2gcj(lat, lng){
+  const PI = Math.PI, a = 6378245.0, ee = 0.00669342162296594323;
+  if(lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lat, lng];
+  const dLat = (x, y)=>{
+    let r = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+    r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
+    r += (20*Math.sin(y*PI) + 40*Math.sin(y/3*PI)) * 2/3;
+    r += (160*Math.sin(y/12*PI) + 320*Math.sin(y*PI/30)) * 2/3;
+    return r;
+  };
+  const dLng = (x, y)=>{
+    let r = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+    r += (20*Math.sin(6*x*PI) + 20*Math.sin(2*x*PI)) * 2/3;
+    r += (20*Math.sin(x*PI) + 40*Math.sin(x/3*PI)) * 2/3;
+    r += (150*Math.sin(x/12*PI) + 300*Math.sin(x/30*PI)) * 2/3;
+    return r;
+  };
+  let dlat = dLat(lng-105, lat-35), dlng = dLng(lng-105, lat-35);
+  const radlat = lat/180*PI;
+  let magic = Math.sin(radlat); magic = 1 - ee*magic*magic;
+  const sq = Math.sqrt(magic);
+  dlat = (dlat*180) / ((a*(1-ee)) / (magic*sq) * PI);
+  dlng = (dlng*180) / (a / sq * Math.cos(radlat) * PI);
+  return [lat + dlat, lng + dlng];
+}
+
+/* GCJ-02 → WGS84（迭代逼近） */
+function gcj2wgs(lat, lng){
+  let wlat = lat, wlng = lng;
+  for(let i=0;i<3;i++){
+    const g = wgs2gcj(wlat, wlng);
+    wlat += lat - g[0];
+    wlng += lng - g[1];
+  }
+  return [wlat, wlng];
+}
+
+/* ---------- ⑦ 地理编码 ---------- */
+async function geocode(place){
+  if(TDT_KEY){
+    const url = "https://api.tianditu.gov.cn/geocoder?ds=" +
+                encodeURIComponent(JSON.stringify({keyWord: place})) + "&tk=" + TDT_KEY;
+    const res = await fetch(url).then(r=>r.json());
+    if(res.location) return [parseFloat(res.location.lat), parseFloat(res.location.lon)];
+    throw new Error("未找到该地点");
+  }
+  const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=zh-CN&q=" +
+              encodeURIComponent(place);
+  const arr = await fetch(url, {headers:{Accept:"application/json"}}).then(r=>r.json());
+  if(!arr.length) throw new Error("未找到该地点");
+  return toMapLL(parseFloat(arr[0].lat), parseFloat(arr[0].lon));
+}
+
+/* ---------- ⑧ 出发地 ---------- */
+function setOrigin(lat, lng, name){
+  ORIGIN = {lat, lng, name};
+  if(originLayer){ map.removeLayer(originLayer); }
+  originLayer = L.marker([lat,lng], {
+    icon: L.divIcon({className:"", html:'<div class="origin-pin">🏠</div>', iconSize:[22,22], iconAnchor:[11,11]})
+  }).addTo(map).bindPopup(`<b>出发地</b><br>${name}`);
+  const st = document.getElementById("originStatus");
+  st.textContent = "已设置：" + name;
+  st.classList.add("ok");
+  try{ localStorage.setItem("dsh_origin", JSON.stringify(ORIGIN)); }catch(e){}
+  clearRoute();
+  if(trafficTarget) openTraffic(trafficTarget.id, true);
+}
+
+async function applyOrigin(){
+  const v = document.getElementById("originInput").value.trim();
+  if(!v) return toast("请先输入住址或地点");
+  toast("正在定位「" + v + "」…");
+  try{
+    const [lat,lng] = await geocode(v);
+    setOrigin(lat, lng, v);
+    map.setView([lat,lng], Math.max(map.getZoom(), 12));
+    toast("出发地已设为：" + v);
+  }catch(e){
+    toast("没找到这个地址，试试加上「北京市」或换成附近地标");
+  }
+}
+
+function locateMe(){
+  if(!navigator.geolocation) return toast("当前浏览器不支持定位");
+  toast("正在获取当前位置…");
+  navigator.geolocation.getCurrentPosition(p=>{
+    const [lat,lng] = toMapLL(p.coords.latitude, p.coords.longitude);
+    setOrigin(lat, lng, "我的当前位置");
+    document.getElementById("originInput").value = "我的当前位置";
+    map.setView([lat,lng], Math.max(map.getZoom(), 13));
+  }, err=>{
+    toast("定位失败（" + (err.message || "权限被拒绝") + "），可直接输入住址");
+  }, {enableHighAccuracy:true, timeout:8000});
+}
+
+/* ---------- ⑨ 交通方案 ---------- */
+const SPEED = { walk:4.8, bus:16, car:24 };   // km/h
+const ROAD_FACTOR = 1.35;                     // 路网 / 直线
+
+function distanceKm(a, b){
+  const R = 6371, toRad = d=>d*Math.PI/180;
+  const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+  const s = Math.sin(dLat/2)**2 +
+            Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng/2)**2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function fmtMin(m){
+  m = Math.max(1, Math.round(m));
+  if(m < 60) return m + " 分钟";
+  const h = Math.floor(m/60), r = m % 60;
+  return h + " 小时" + (r ? " " + r + " 分" : "");
+}
+function fmtKm(km){ return km < 1 ? Math.round(km*1000) + " 米" : km.toFixed(1) + " km"; }
+
+/* 高德 URI：真实路线 / 实时公交 */
+function amapURL(a, mode){
+  const [olat,olng] = toGcjLL(ORIGIN.lat, ORIGIN.lng);
+  const [tlat,tlng] = toGcjLL(a.lat, a.lng);
+  const from = `from=${olng},${olat},${encodeURIComponent(ORIGIN.name)}`;
+  const to   = `to=${tlng},${tlat},${encodeURIComponent(a.name)}`;
+  return `https://uri.amap.com/navigation?${from}&${to}&mode=${mode}&policy=1&src=dsh-cluewall&callnative=1`;
+}
+
+function openTraffic(id, silent){
+  const a = activities.find(x=>x.id==id);
+  if(!a) return;
+  if(!ORIGIN){
+    if(!silent){
+      toast("请先在顶部设置「出发地」");
+      document.getElementById("originInput").focus();
+    }
+    return;
+  }
+  trafficTarget = a;
+
+  const straight = distanceKm(ORIGIN, a);
+  const road = straight * ROAD_FACTOR;
+  const walk = road / SPEED.walk * 60;
+  const bus  = road / SPEED.bus * 60 + 8;
+  const car  = road / SPEED.car * 60 + 3;
+  const fare = 13 + Math.max(0, road - 3) * 2.3;
+
+  document.getElementById("tmTitle").textContent = "🚦 " + a.name;
+  document.getElementById("tmSub").innerHTML =
+    `<b>${ORIGIN.name}</b> → <b>${a.date} ${a.time}</b><br>` +
+    `直线 ${fmtKm(straight)} · 按路网约 ${fmtKm(road)}`;
+
+  const rows = [];
+  if(walk <= 150){
+    rows.push(modeRow("🚶","步行", fmtMin(walk), `${fmtKm(road)} · 按 4.8 km/h 估算`, amapURL(a,"walk")));
+  }
+  rows.push(modeRow("🚌","公交 / 地铁", fmtMin(bus),
+    `${fmtKm(road)} · 含约 8 分钟候车换乘，实时路线见高德`, amapURL(a,"bus")));
+  rows.push(modeRow("🚗","开车 / 打车", fmtMin(car),
+    `${fmtKm(road)} · 打车约 ${Math.round(fare)} 元（北京估价）`, amapURL(a,"car")));
+
+  document.getElementById("tmBody").innerHTML = rows.join("");
+  document.getElementById("tmodal").classList.add("on");
+  clearRoute();
+}
+
+function modeRow(ico, name, time, desc, url){
+  return `<div class="mode">
+    <div class="mode-h"><span class="ico">${ico}</span><b>${name}</b><span class="t">${time}</span></div>
+    <div class="mode-d">${desc}</div>
+    <a class="mode-a" href="${url}" target="_blank" rel="noopener">在高德查看${name}路线 ↗</a>
+  </div>`;
+}
+
+function closeTraffic(){ document.getElementById("tmodal").classList.remove("on"); }
+
+/* 真实路网路线：OSRM 公共实例（免密钥，失败则保持估算） */
+async function fetchRoute(a, profile){
+  const [olat,olng] = fromMapLL(ORIGIN.lat, ORIGIN.lng);
+  const [dlat,dlng] = fromMapLL(a.lat, a.lng);
+  const base = profile === "foot"
+    ? "https://routing.openstreetmap.de/routed-foot/route/v1/driving/"
+    : "https://routing.openstreetmap.de/routed-car/route/v1/driving/";
+  const url = `${base}${olng},${olat};${dlng},${dlat}?overview=full&geometries=geojson`;
+  const opt = (typeof AbortSignal !== "undefined" && AbortSignal.timeout)
+    ? {signal: AbortSignal.timeout(8000)} : {};
+  const r = await fetch(url, opt).then(x=>x.json());
+  if(!r.routes || !r.routes.length) throw new Error("no route");
+  return r.routes[0];
+}
+
+let lastRoute = null;
+async function drawRoute(){
+  if(!ORIGIN || !trafficTarget) return toast("请先设置出发地和活动");
+  const a = trafficTarget;
+  toast("正在规划真实路线…");
+  try{
+    lastRoute = await fetchRoute(a, "car");
+    const pts = lastRoute.geometry.coordinates.map(([lng,lat])=>toMapLL(lat,lng));
+    clearRoute();
+    routeLayer = L.layerGroup([
+      L.polyline(pts, {color:"#4361ee", weight:5, opacity:.85}),
+      L.polyline(pts, {color:"#8ec5ff", weight:2, opacity:.9, dashArray:"8 8"})
+    ]).addTo(map);
+    map.fitBounds(routeLayer.getLayers()[0].getBounds(), {padding:[60,60]});
+    const km = (lastRoute.distance/1000).toFixed(1);
+    const min = Math.round(lastRoute.duration/60);
+    toast(`路网 ${km} km · 驾车约 ${min} 分钟`);
+  }catch(e){
+    toast("在线路网服务不可用，已保留估算：可点「在高德查看」看真实路线");
+  }
+}
+
+function clearRoute(){
+  if(routeLayer){ map.removeLayer(routeLayer); routeLayer = null; }
+  lastRoute = null;
+}
+
+/* ---------- ⑩ 底部三栏 ---------- */
+function switchTab(i){
+  [0,1,2].forEach(n=>document.getElementById("tab"+n).style.display = n===i?"block":"none");
+  document.querySelectorAll(".tab-nav button").forEach((b,n)=>b.classList.toggle("active",n===i));
+}
+function infoLine(a){
+  const l = a.links.filter(x=>x.url.startsWith("http"))[0];
+  return `${a.date} ${a.time} · 时长 ${a.duration} · 💰 ${a.fee}` +
+         (l ? ` · <a href="${l.url}" target="_blank" rel="noopener">报名入口 ↗</a>` : "");
+}
+function renderTabs(){
+  const week = activities.filter(a=>a.type!=="workshop");
+  const done = Object.keys(state.checkin).length;
+  document.getElementById("tab0").innerHTML = week.length
+    ? `<p style="color:#8aa0b8;font-size:12px;margin-bottom:10px">已打卡 ${done} 场 ｜ 共 ${week.length} 场可打卡活动</p>` +
+      week.map(a=>`
+      <div class="item">
+        <div>
+          <div class="t">【${TAG[a.type]}】${a.name}</div>
+          <div class="s">${infoLine(a)}</div>
+        </div>
+        <button class="pts" onclick="checkin('${a.id}')">${state.checkin[a.id]?"✓ 已打卡":"打卡 +1"}</button>
+      </div>`).join("")
+    : "<p class='empty'>本周暂无慈善/探索活动</p>";
+
+  document.getElementById("tab1").innerHTML =
+    `<div class="share-box">
+       <input id="shareInput" placeholder="写下这次活动的收获…" onkeydown="if(event.key==='Enter')postShare()">
+       <button onclick="postShare()">发布</button>
+     </div>` +
+    (state.shares.map((s,i)=>`
+      <div class="item"><span>${s.text}</span>
+        <button class="pts" onclick="likeShare(${i})">👍 ${s.likes}</button></div>`).join("") ||
+     "<p class='empty'>还没有人分享，来做第一个吧</p>");
+
+  const shop = activities.filter(a=>a.type==="workshop");
+  document.getElementById("tab2").innerHTML = shop.length
+    ? shop.map(a=>`
+      <div class="item">
+        <div>
+          <div class="t">【工坊】${a.name}</div>
+          <div class="s">${a.date} ${a.time} · 时长 ${a.duration} · 📍${a.place} · 💰 ${a.fee}</div>
+        </div>
+        <button class="pts" onclick="openTraffic('${a.id}')">查询交通</button>
+      </div>`).join("")
+    : "<p class='empty'>本周暂无实践工坊</p>";
+}
+function checkin(id){ state.checkin[id]=true; renderTabs(); }
+function likeShare(i){ state.shares[i].likes++; renderTabs(); }
+function postShare(){
+  const el = document.getElementById("shareInput");
+  const text = el.value.trim();
+  if(!text) return;
+  state.shares.unshift({text, likes:0});
+  renderTabs();
+}
+
+/* ---------- ⑪ 复制 + 轻提示 ---------- */
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("on");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(()=>t.classList.remove("on"), 2600);
+}
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    toast("已复制：" + text);
+  }catch(e){
+    toast("请手动复制：" + text);
+  }
+}
+
+/* ---------- ⑫ 一键分享：微信封面卡 ---------- */
+const SHARE_TITLE = "志远行 · 北京共学活动地图";
+/* 日期与文案：全部由 activities 推导，以后改活动不用动这里 */
+function fmtDate(d){ const p = String(d).split("-"); return p[1] ? p[0] + "." + p[1] : String(d); }
+function dateRange(){
+  const ds = [...new Set(activities.map(a=>a.date).filter(Boolean))].sort();
+  if(!ds.length) return "本周";
+  const a = fmtDate(ds[0]), b = fmtDate(ds[ds.length-1]);
+  return a === b ? a : a + " – " + b;
+}
+function weekLine(){
+  return `${dateRange()} ｜ 公益 / 探索 / 工坊 ${activities.length} 场活动`;
+}
+function shareDesc(){
+  const n = activities.length;
+  const first = activities[0] ? String(activities[0].name).split("·")[0].trim() : "";
+  return `${dateRange()} 北京 ${n} 场活动${first ? "：首场 " + first : ""}，时间 / 收费 / 报名入口见图`;
+}
+function syncHead(){
+  const t = document.getElementById("stageTitle");
+  if(t) t.textContent = dateRange() + " · 志远行北京共学活动地图";
+  document.title = dateRange() + " · 志远行共学活动地图";
+}
+syncHead();
+const FONT_SC = "'PingFang SC','Microsoft YaHei',sans-serif";
+
+const COVER   = {W:1080, H:1350};
+const MAP_BOX = {x:56, y:236, w:968, h:776};
+const GEO     = {lat0:39.72, lat1:40.10, lng0:116.24, lng1:116.58};
+const COVER_MAX_CARDS = 4;
+function buildCardBoxes(list){
+  const shown = Math.min(list.length, COVER_MAX_CARDS);
+  const boxes = [];
+  const h = 232, gapY = 26;
+  const rows = Math.ceil(shown / 2);
+  const totalH = rows * h + (rows - 1) * gapY;
+  const y0 = MAP_BOX.y + (MAP_BOX.h - totalH) / 2 + 6;
+  for(let i=0;i<shown;i++){
+    const r = Math.floor(i/2), isLeft = i % 2 === 0;
+    const x = shown === 1 ? (1080 - 326) / 2 : (isLeft ? 84 : 674);
+    boxes.push({x, y: y0 + r*(h+gapY), w:326, h, act:list[i]});
+  }
+  return boxes;
+}
+
+let shareCanvas = null, shareSeq = 0, lastQR = "";
+
+/* --- 弹窗骨架 --- */
+(function injectShareModal(){
+  const el = document.createElement("div");
+  el.id = "smodal";
+  el.className = "smodal";
+  el.innerHTML = `
+    <div class="scard">
+      <button class="sclose" onclick="closeShare()">×</button>
+      <h3>📤 分享到微信</h3>
+      <p class="sdesc">下面是生成好的分享卡片：标题 + 封面图 + 链接。
+        封面按当前三场活动和真实经纬度画出来，可保存发朋友圈、做公众号封面或群卡片图。</p>
+      <div class="wxs">
+        <div class="wxs-head"><span class="wxs-av">志</span><span>志远行</span></div>
+        <div class="wxs-title">志远行 · 北京共学活动地图</div>
+        <img id="sThumb" class="wxs-thumb" alt="微信卡片缩略图">
+        <div class="wxs-tag">🔗 点此查看本周活动地图</div>
+      </div>
+      <label class="slab">封面图 · 1080 × 1350（保存后上传到仓库根目录，文件名 weixin_cover.png）</label>
+      <img id="sPreview" class="sprev" alt="封面预览">
+      <label class="slab">分享链接（部署后的网址，用于生成二维码）</label>
+      <input id="sLink" placeholder="https://…（不填也能出图，只是没有二维码）" onchange="renderShare()">
+      <p id="sLinkTip" class="stip2"></p>
+      <div class="sbtns">
+        <button onclick="downloadCover()">⬇ 保存封面图</button>
+        <button onclick="copyShareText()">📋 复制分享文案</button>
+        <button onclick="copyShareLink()">🔗 只复制链接</button>
+        <button class="ghost2" onclick="renderShare()">↻ 重新生成</button>
+      </div>
+    </div>`;
+  el.addEventListener("click", e=>{ if(e.target === el) closeShare(); });
+  document.body.appendChild(el);
+})();
+
+function openShare(){
+  document.getElementById("smodal").classList.add("on");
+  const inp = document.getElementById("sLink");
+  if(!inp.value && /^https?:/i.test(location.href)) inp.value = location.href;
+  renderShare();
+}
+function closeShare(){ document.getElementById("smodal").classList.remove("on"); }
+
+async function renderShare(){
+  const seq = ++shareSeq;
+  const link = (document.getElementById("sLink").value || "").trim();
+  const isWeb = /^https?:\/\//i.test(link);
+  const tip = document.getElementById("sLinkTip");
+  tip.textContent = isWeb
+    ? "✓ 二维码指向该链接，扫码或点开就能看到这张活动地图"
+    : "本地文件（file://）别人打不开：先部署到线上（公众号菜单 / 静态托管 / 内网），再把网址填进来生成二维码";
+  tip.className = "stip2" + (isWeb ? " ok2" : "");
+
+  const cv = await buildCover(isWeb ? link : "");
+  if(seq !== shareSeq) return;         // 旧的渲染结果丢弃
+  shareCanvas = cv;
+  const url = cv.toDataURL("image/png");
+  document.getElementById("sPreview").src = url;
+  document.getElementById("sThumb").src = url;
+}
+
+/* --- 绘图小工具 --- */
+function rr(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y);
+  g.arcTo(x+w,y,x+w,y+h,r);
+  g.arcTo(x+w,y+h,x,y+h,r);
+  g.arcTo(x,y+h,x,y,r);
+  g.arcTo(x,y,x+w,y,r);
+  g.closePath();
+}
+function ellip(g, text, maxW){
+  if(g.measureText(text).width <= maxW) return text;
+  let t = text;
+  while(t.length > 1 && g.measureText(t + "…").width > maxW) t = t.slice(0,-1);
+  return t + "…";
+}
+function tokenize(text){
+  const out = [];
+  const re = /[A-Za-z0-9]+(?:[–—\-:.\/][A-Za-z0-9]+)*|\s+|[\s\S]/gu;
+  let m;
+  while((m = re.exec(text))){
+    out.push(/^\s+$/.test(m[0]) ? " " : m[0]);
+  }
+  return out;
+}
+function wrapText(g, text, maxW, maxLines){
+  const toks = tokenize(text), lines = [];
+  let cur = "";
+  for(let i=0;i<toks.length;i++){
+    const tok = toks[i];
+    if(cur === "" && tok === " ") continue;
+    if(g.measureText(cur + tok).width <= maxW){ cur += tok; continue; }
+
+    if(tok === " "){ lines.push(cur.replace(/\s+$/,"")); cur = ""; continue; }
+
+    if(cur === ""){                       // 单个词块就超宽 → 硬切
+      let piece = "";
+      for(const ch of tok){
+        if(g.measureText(piece + ch).width <= maxW) piece += ch;
+        else { lines.push(piece); piece = ch; }
+      }
+      cur = piece;
+      continue;
+    }
+
+    lines.push(cur.replace(/\s+$/,""));
+    cur = tok;
+    if(lines.length === maxLines - 1){    // 最后一行：剩余内容拼起来，超宽加省略号
+      const rest = (cur + toks.slice(i+1).join("")).replace(/\s+/g," ").trim();
+      let last = rest;
+      while(last && g.measureText(last + "…").width > maxW) last = last.slice(0,-1);
+      lines.push(last + (last.length < rest.length ? "…" : ""));
+      return lines;
+    }
+  }
+  if(cur.trim()) lines.push(cur.replace(/\s+$/,""));
+  return lines;
+}
+function proj(lat, lng){
+  const pad = 54;
+  const x = MAP_BOX.x + pad + (lng-GEO.lng0)/(GEO.lng1-GEO.lng0) * (MAP_BOX.w-2*pad);
+  const y = MAP_BOX.y + pad + (GEO.lat1-lat)/(GEO.lat1-GEO.lat0) * (MAP_BOX.h-2*pad);
+  return [x,y];
+}
+function cardAnchor(card, dot){
+  const cx = card.x + card.w/2, cy = card.y + card.h/2;
+  const dx = dot[0]-cx, dy = dot[1]-cy;
+  const L = Math.hypot(dx,dy) || 1;
+  const cands = [
+    {p:[card.x+card.w, cy], v:[1,0]},
+    {p:[card.x, cy],        v:[-1,0]},
+    {p:[cx, card.y],        v:[0,-1]},
+    {p:[cx, card.y+card.h], v:[0,1]}
+  ];
+  let best = cands[0], bs = -1e9;
+  for(const c of cands){
+    const s = (dx*c.v[0] + dy*c.v[1]) / L;
+    if(s > bs){ bs = s; best = c; }
+  }
+  return best.p;
+}
+
+/* --- 封面绘制 --- */
+function drawMapBase(g){
+  const {x,y,w,h} = MAP_BOX;
+  g.strokeStyle = "rgba(168,148,118,.20)"; g.lineWidth = 1;
+  for(let gx=x; gx<=x+w; gx+=64){ g.beginPath(); g.moveTo(gx,y); g.lineTo(gx,y+h); g.stroke(); }
+  for(let gy=y; gy<=y+h; gy+=64){ g.beginPath(); g.moveTo(x,gy); g.lineTo(x+w,gy); g.stroke(); }
+
+  const [cx,cy] = proj(39.9042,116.4074);
+  g.strokeStyle = "rgba(150,128,98,.42)"; g.lineWidth = 3;
+  [95,150,215].forEach(r=>{
+    g.beginPath(); g.ellipse(cx,cy,r*1.25,r,0,0,Math.PI*2); g.stroke();
+  });
+  g.strokeStyle = "rgba(150,128,98,.26)"; g.lineWidth = 4;
+  for(let a=0;a<8;a++){
+    const ang = a*Math.PI/4 + .21;
+    g.beginPath(); g.moveTo(cx,cy);
+    g.lineTo(cx+Math.cos(ang)*560, cy+Math.sin(ang)*520); g.stroke();
+  }
+
+  g.fillStyle = "rgba(120,100,75,.52)";
+  g.font = `400 20px ${FONT_SC}`;
+  g.fillText("昌平", 452, 300);
+  g.fillText("海淀", 128, 600);
+  g.fillText("城区", 596, 592);
+  g.fillText("亦庄", 862, 806);
+}
+function drawConnector(g, card, dot, color){
+  const [ax,ay] = cardAnchor(card, dot);
+  const mx = (ax + dot[0]) / 2;
+  g.save();
+  g.setLineDash([9,7]); g.lineWidth = 3; g.strokeStyle = color; g.globalAlpha = .75;
+  g.beginPath(); g.moveTo(ax,ay); g.quadraticCurveTo(mx, ay, dot[0], dot[1]); g.stroke();
+  g.restore();
+}
+function drawDot(g, dot, color){
+  g.beginPath(); g.arc(dot[0],dot[1],14,0,Math.PI*2); g.fillStyle = "rgba(255,255,255,.92)"; g.fill();
+  g.beginPath(); g.arc(dot[0],dot[1],9,0,Math.PI*2); g.fillStyle = color; g.fill();
+  g.lineWidth = 3; g.strokeStyle = "#fff"; g.stroke();
+}
+function fitTitle(g, text, maxW, maxLines){
+  for(const size of [22,21,20,19,18,17]){
+    g.font = `700 ${size}px ${FONT_SC}`;
+    const lines = wrapText(g, text, maxW, maxLines);
+    const last = lines[lines.length-1] || "";
+    const orphan = lines.length > 1 && g.measureText(last).width < maxW * 0.35;
+    if(!orphan) return {size, lines};
+  }
+  g.font = `700 17px ${FONT_SC}`;
+  return {size:17, lines: wrapText(g, text, maxW, maxLines)};
+}
+function drawCard(g, card, a){
+  const c = COLORS[a.type], note = NOTE[a.type];
+  const px = card.x + 26, innerW = card.w - 52;
+
+  g.save();
+  g.shadowColor = "rgba(60,45,20,.24)"; g.shadowBlur = 16; g.shadowOffsetY = 8;
+  rr(g, card.x, card.y, card.w, card.h, 10);
+  g.fillStyle = note; g.fill();
+  g.restore();
+
+  g.save();
+  rr(g, card.x, card.y, card.w, card.h, 10); g.clip();
+  g.fillStyle = c; g.fillRect(card.x, card.y, 8, card.h);
+  g.restore();
+
+  // 胶带
+  g.save();
+  g.translate(card.x + card.w/2, card.y); g.rotate(-0.035);
+  g.fillStyle = "rgba(255,255,255,.62)"; g.fillRect(-44,-9,88,18);
+  g.restore();
+
+  // 分类标签
+  g.font = `700 16px ${FONT_SC}`;
+  const tag = TAG[a.type];
+  const tw = g.measureText(tag).width + 20;
+  rr(g, px, card.y+18, tw, 24, 12); g.fillStyle = c; g.fill();
+  g.fillStyle = "#fff"; g.fillText(tag, px+10, card.y+22);
+
+  // 报名平台
+  g.font = `400 15px ${FONT_SC}`;
+  const src = ellip(g, (a.links[0] && a.links[0].label) || "", 120);
+  const sw = g.measureText(src).width + 16;
+  rr(g, card.x+card.w-26-sw, card.y+18, sw, 24, 12);
+  g.fillStyle = "rgba(255,255,255,.75)"; g.fill();
+  g.fillStyle = "#6a5a48"; g.fillText(src, card.x+card.w-26-sw+8, card.y+23);
+
+  // 标题（自动缩字号，避免最后一行只剩一两个字）
+  const fit = fitTitle(g, a.name, innerW, 3);
+  g.fillStyle = "#332a24";
+  g.font = `700 ${fit.size}px ${FONT_SC}`;
+  const lineH = Math.round(fit.size * 1.28);
+  fit.lines.forEach((ln,i)=> g.fillText(ln, px, card.y+54+i*lineH));
+
+  // 信息行（过长的自动折到第二行）
+  g.font = `400 18px ${FONT_SC}`;
+  g.fillStyle = "#4a3f35";
+  const rows = [
+    a.date + " " + a.time,
+    "时长 " + a.duration,
+    "收费 " + a.fee
+  ];
+  let ry = card.y + 54 + fit.lines.length*lineH + 8;
+  rows.forEach(t=>{
+    wrapText(g, t, innerW, 2).forEach(ln=>{
+      g.fillText(ln, px, ry);
+      ry += 26;
+    });
+  });
+}
+
+async function qrImage(text){
+  return new Promise(res=>{
+    if(typeof QRCode === "undefined" || !text) return res(null);
+    try{
+      QRCode.toDataURL(text, {margin:0, width:320, errorCorrectionLevel:"M",
+        color:{dark:"#12233a", light:"#ffffff"}}, (err,url)=>{
+        if(err || !url) return res(null);
+        const img = new Image();
+        img.onload = ()=> res(img);
+        img.onerror = ()=> res(null);
+        img.src = url;
+      });
+    }catch(e){ res(null); }
+  });
+}
+
+async function buildCover(qrLink){
+  const {W,H} = COVER;
+  const cv = document.createElement("canvas");
+  cv.width = W; cv.height = H;
+  const g = cv.getContext("2d");
+  g.textBaseline = "top";
+  if(qrLink !== lastQR){ lastQR = qrLink; }
+
+  const bg = g.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,"#0d1b2a"); bg.addColorStop(1,"#1b2d46");
+  g.fillStyle = bg; g.fillRect(0,0,W,H);
+
+  g.save();
+  g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 40; g.shadowOffsetY = 14;
+  rr(g,24,24,W-48,H-48,30); g.fillStyle = "#f8f3e6"; g.fill();
+  g.restore();
+
+  g.save();
+  rr(g,24,24,W-48,H-48,30); g.clip();
+  g.fillStyle = "rgba(190,175,150,.32)";
+  for(let y=52;y<H-30;y+=28) for(let x=52;x<W-30;x+=28) g.fillRect(x,y,1.6,1.6);
+  g.restore();
+
+  g.fillStyle = "#1b2a3a"; g.font = `700 52px ${FONT_SC}`;
+  g.fillText(SHARE_TITLE, 72, 84);
+  g.fillStyle = "#6a7a8c"; g.font = `400 25px ${FONT_SC}`;
+  g.fillText(weekLine(), 74, 156);
+  rr(g,72,202,132,7,3.5); g.fillStyle = "#e0a020"; g.fill();
+
+  // 地图面板
+  g.save();
+  rr(g,MAP_BOX.x,MAP_BOX.y,MAP_BOX.w,MAP_BOX.h,18);
+  g.fillStyle = "#efe6d3"; g.fill();
+  g.strokeStyle = "#d9cbaf"; g.lineWidth = 2; g.stroke();
+  g.clip();
+  drawMapBase(g);
+  const boxes = buildCardBoxes(activities);
+  boxes.forEach(b=> drawConnector(g, b, proj(b.act.lat, b.act.lng), COLORS[b.act.type]));
+  g.restore();
+
+  boxes.forEach(b=> drawCard(g, b, b.act));
+  activities.forEach(a=> drawDot(g, proj(a.lat,a.lng), COLORS[a.type]));
+
+  if(activities.length > COVER_MAX_CARDS){
+    const more = `另有 ${activities.length - COVER_MAX_CARDS} 场活动 · 详见地图页`;
+    g.font = `700 21px ${FONT_SC}`;
+    const tw = g.measureText(more).width + 44;
+    rr(g, 1024 - tw, MAP_BOX.y + MAP_BOX.h - 60, tw, 38, 19);
+    g.fillStyle = "rgba(27,42,58,.85)"; g.fill();
+    g.fillStyle = "#fff";
+    g.fillText(more, 1024 - tw + 22, MAP_BOX.y + MAP_BOX.h - 50);
+  }
+
+  // 页脚
+  g.strokeStyle = "rgba(200,186,160,.95)"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(72,1032); g.lineTo(1008,1032); g.stroke();
+
+  const qr = qrLink ? await qrImage(qrLink) : null;
+  if(qr){
+    rr(g,72,1056,168,168,14); g.fillStyle = "#fff"; g.fill();
+    g.drawImage(qr,80,1064,152,152);
+  }else{
+    g.save(); g.setLineDash([9,7]); g.strokeStyle = "#cbbfa6"; g.lineWidth = 2;
+    rr(g,72,1056,168,168,14); g.stroke(); g.restore();
+    g.fillStyle = "#a89a80"; g.font = `400 18px ${FONT_SC}`;
+    g.fillText("二维码", 120, 1122);
+    g.fillText("待生成", 120, 1150);
+  }
+
+  const tx = 280;
+  g.fillStyle = "#1b2a3a"; g.font = `700 30px ${FONT_SC}`;
+  g.fillText(qr ? "扫码打开活动地图" : "分享链接未设置", tx, 1070);
+  g.fillStyle = "#6a7a8c"; g.font = `400 21px ${FONT_SC}`;
+  g.fillText("三场活动的时间、时长、收费与报名入口都在图里", tx, 1116);
+  g.font = `400 18px ${FONT_SC}`;
+  if(qrLink){
+    g.fillStyle = "#8d9aa8"; g.fillText(ellip(g, qrLink, 700), tx, 1156);
+  }else{
+    g.fillStyle = "#b07a3a";
+    g.fillText("把部署后的网址填进「分享链接」，二维码会自动生成", tx, 1156);
+  }
+
+  g.fillStyle = "#9aa7b4"; g.font = `400 19px ${FONT_SC}`;
+  g.fillText("志远行共学地图 · 每周更新", 72, 1268);
+  g.textAlign = "right";
+  g.fillText(dateRange() + " · BEIJING", 1008, 1268);
+  g.textAlign = "left";
+
+  return cv;
+}
+
+/* --- 保存 / 复制 --- */
+function downloadCover(){
+  if(!shareCanvas) return toast("封面还在生成…");
+  const a = document.createElement("a");
+  a.download = "weixin_cover.png";
+  a.href = shareCanvas.toDataURL("image/png");
+  document.body.appendChild(a); a.click(); a.remove();
+  toast("封面已保存（1080×1350）");
+}
+function copyShareText(){
+  const link = (document.getElementById("sLink").value || "").trim();
+  copyText(`${SHARE_TITLE}\n${shareDesc()}\n${link || "（链接待补充）"}`);
+}
+function copyShareLink(){
+  const link = (document.getElementById("sLink").value || "").trim();
+  if(!link) return toast("还没有可复制的链接，先填一个线上网址");
+  copyText(link);
+}
+document.addEventListener("keydown", e=>{
+  if(e.key === "Escape"){ closeShare(); closeTraffic(); }
+});
+
+/* ---------- ⑫ 启动 ---------- */
+renderAll();
+
+/* 恢复上次设置的出发地 */
+try{
+  const saved = JSON.parse(localStorage.getItem("dsh_origin") || "null");
+  if(saved && saved.lat){
+    setOrigin(saved.lat, saved.lng, saved.name);
+    document.getElementById("originInput").value = saved.name;
+  }
+}catch(e){}
+</script>
+</body>
+</html>
