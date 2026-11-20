@@ -60,6 +60,9 @@ PLACES = {
     "隆福寺": (39.9250, 116.4070), "北京坊": (39.8990, 116.3950),
     "国子监": (39.9450, 116.4090), "朝阳公园": (39.9430, 116.4780),
     "温榆河": (40.0500, 116.5500),
+    # 昌平兴寿镇西新城村（昌金路旁），据园区官网 www.xinchengyuangp.com
+    "鑫城缘": (40.2080, 116.3600), "西新城": (40.2080, 116.3600),
+    "兴寿": (40.2150, 116.3700),
     "亮马桥": (39.9490, 116.4660), "罗马桥": (39.9490, 116.4660),   # 「罗马桥」多为「亮马桥」笔误
     "平安国际金融中心": (39.9490, 116.4660), "燕莎": (39.9495, 116.4620),
     "国贸": (39.9088, 116.4590), "金融街": (39.9150, 116.3610),
@@ -101,7 +104,7 @@ DEMO_TEXT = """活动一：世界记忆大师团 体验课
 
 # ---------------------------------------------------------------- 解析
 FIELD = re.compile(
-    r"^\s*(标题|名称|活动名称|主题|时间|日期|地点|地址|费用|收费|价格|票价|报名|链接|报名链接|"
+    r"^\s*(标题|名称|活动名称|主题|活动|时间|日期|地点|地址|费用|收费|价格|票价|报名|链接|报名链接|"
     r"类型|分类|主办|主办方|备注|日程|简介|说明|适合人群|人群)\s*[：:]\s*(.*)$")
 ACT_HEAD = re.compile(r"^\s*活动\s*[一二三四五六七八九十百\d]*\s*[：:]?\s*(.*)$")
 
@@ -150,6 +153,15 @@ def split_blocks(text: str):
     return out
 
 
+def clean(s: str) -> str:
+    """去掉零宽字符、全角空格、多余空白。"""
+    if not s:
+        return ""
+    s = re.sub(r"[\u200b-\u200f\ufeff\u00ad]", "", str(s))
+    s = s.replace("\u3000", " ")
+    return re.sub(r"\s+", " ", s).strip()
+
+
 def fmt_duration(minutes: int) -> str:
     if minutes <= 0:
         return "待定"
@@ -163,8 +175,12 @@ def fmt_duration(minutes: int) -> str:
 
 def parse_time(raw: str):
     """返回 (起始日期, 显示时间, 时长, 跨天数)。支持多日与单日时段。"""
-    s = raw.strip().replace("（", "(").replace("）", ")")
+    s = clean(raw).replace("（", "(").replace("）", ")")
     dates = []
+    m2 = re.search(r"(\d{1,2})\s*月\s*(\d{1,2})\s*[-–~～]\s*(\d{1,2})\s*[日号]", s)
+    if m2:
+        dates = ["%02d-%02d" % (int(m2.group(1)), int(m2.group(2))),
+                 "%02d-%02d" % (int(m2.group(1)), int(m2.group(3)))]
     for m in re.finditer(r"(?:(?:\d{4})\s*[-/.年]\s*)?(\d{1,2})\s*[-/.月]\s*(\d{1,2})\s*(?:日|号)?", s):
         mm, dd = int(m.group(1)), int(m.group(2))
         if 1 <= mm <= 12 and 1 <= dd <= 31:
@@ -196,22 +212,25 @@ def parse_time(raw: str):
 
 def norm_fee(raw: str):
     """返回 (显示文本, 是否待定, 完整票价说明)。复杂票价原样保留。"""
-    s = re.sub(r"\s+", " ", raw.strip())
+    s = clean(raw)
     if not s:
         return "待确认", True, ""
     if "免费" in s:
         return "免费", False, ""
-    nums = re.findall(r"\d+(?:\.\d+)?", s.replace(",", ""))
-    complex_fee = len(nums) >= 3 or any(k in s for k in ("单人", "双人", "套票", "学生票", "起" if False else "票种"))
-    if not nums:
-        return s, False, ""
-    if complex_fee:
+    # ① 明确的价位区间：50 - 198、¥128~176
+    m = re.search(r"[¥￥]?\s*(\d+(?:\.\d+)?)\s*元?\s*[-–~～至]\s*[¥￥]?\s*(\d+(?:\.\d+)?)", s)
+    if m and len(m.group(2)) >= 1:
+        return "¥%s – %s" % (m.group(1), m.group(2)), False, (s if len(s) > 10 else "")
+    # ② 多档票价（单人/双人/套票等多种）
+    prices = re.findall(r"[¥￥]\s*(\d+(?:\.\d+)?)", s) or re.findall(r"(\d+(?:\.\d+)?)\s*元", s)
+    if len(prices) >= 2 or any(k in s for k in ("单人", "双人", "套票", "票种", "套餐")):
         short = s if len(s) <= 16 else s[:16].rstrip() + "…"
         return short, False, s
-    suffix = " 起" if s.endswith("起") else ""
-    if len(nums) >= 2:
-        return "¥%s – %s%s" % (nums[0], nums[1], suffix), False, s if s != "¥%s - %s元" % (nums[0], nums[1]) else ""
-    return "¥%s%s" % (nums[0], suffix), False, ""
+    # ③ 单一价格（后面括号里的说明进弹窗）
+    if prices:
+        return "¥" + prices[0], False, (s if len(s) > 8 else "")
+    nums = re.findall(r"\d+(?:\.\d+)?", s)
+    return ("¥" + nums[0] if nums else s), False, ""
 
 
 def guess_type(name: str, explicit: str):
@@ -307,12 +326,12 @@ def build_activities(blocks, extra, tk, use_geo):
     acts, warns = [], []
     for i, b in enumerate(blocks, 1):
         f = b["fields"]
-        name = (f.get("标题") or f.get("名称") or f.get("活动名称") or b["head"] or "").strip()
+        name = clean(f.get("标题") or f.get("名称") or f.get("活动名称") or b["head"] or "")
         if not name:
             continue
         raw_time = f.get("时间") or f.get("日期") or ""
         d, t, dur, _span = parse_time(raw_time)
-        place = (f.get("地点") or f.get("地址") or "").strip()
+        place = clean(f.get("地点") or f.get("地址") or "")
         fee, pending, fee_note = norm_fee(f.get("费用") or f.get("收费") or f.get("价格") or f.get("票价") or "")
         typ = guess_type(name + " " + (f.get("主题") or ""), f.get("类型") or f.get("分类") or "")
         links = parse_links(f.get("报名") or f.get("链接") or f.get("报名链接") or "")
@@ -320,7 +339,8 @@ def build_activities(blocks, extra, tk, use_geo):
         if how in ("区中心(粗略)", "未识别→北京市中心"):
             warns.append("「%s」用的是%s，建议在 地名坐标.txt 里补精确坐标" % (place or name, how))
 
-        note = "；".join(x for x in [f.get("备注"), f.get("日程"), f.get("简介"), f.get("说明")] if x)
+        note = "；".join(clean(x) for x in [f.get("活动"), f.get("日程"), f.get("备注"),
+                                           f.get("简介"), f.get("说明")] if x)
         host = (f.get("主办") or f.get("主办方") or f.get("主题") or "").strip() \
             or ("%s · 志远行整理" % TAG_NAME[typ])
 
@@ -354,6 +374,8 @@ def find_template(explicit=None) -> Path:
     def usable(p):
         if "生成" in p.name:
             return False
+        if p.name.lower().startswith("index"):
+            return False
         if re.search(r"_\d{2}[.\-]\d{2}\.html$", p.name):
             return False
         return "共学地图" in p.name or p.stat().st_size > 30000
@@ -374,15 +396,40 @@ def date_range(acts):
     return fmt(ds[0]) if len(ds) == 1 else "%s – %s" % (fmt(ds[0]), fmt(ds[-1]))
 
 
+# 部署地址：分享卡片的 og:url / og:image 用它拼。换域名只改这一行。
+SITE_URL = "https://zaohuazheyue.github.io/merit-and-ambition-map/"
+COVER_NAME = "weixin_cover.png"    # 分享封面：放仓库根目录，ASCII 小写命名，别用中文
+
+
+def inject_meta(html, title, desc, site):
+    """把模板里的 __META_*__ 占位符换成真实值；模板没有占位符就原样返回。"""
+    site = (site or "").rstrip("/") + "/"
+    pairs = {
+        "__META_TITLE__": title,
+        "__META_DESC__": desc.replace('"', "'"),
+        "__META_URL__": site,
+        "__META_IMG__": site + COVER_NAME,
+    }
+    for k, v in pairs.items():
+        html = html.replace(k, v)
+    return html
+
+
 def render(tpl_html: str, acts) -> str:
     block = "const activities = " + json.dumps(acts, ensure_ascii=False, indent=2) + ";"
     pat = re.compile(r"const activities = \[.*?\n\];", re.S)
     if len(pat.findall(tpl_html)) != 1:
         sys.exit("模板里没找到唯一的 `const activities = [...]`，请确认模板是否被改过")
     html = pat.sub(lambda _m: block, tpl_html, count=1)
+
     rng = date_range(acts)
-    html = re.sub(r"<title>.*?</title>", "<title>%s · 志远行共学活动地图</title>" % rng, html, count=1)
-    return html
+    title = "%s · 志远行共学活动地图" % rng
+    html = re.sub(r"<title>.*?</title>", "<title>%s</title>" % title, html, count=1)
+
+    # 微信 / QQ 抓取用的分享卡片信息
+    names = [a["name"].split("·")[0].strip() for a in acts][:3]
+    desc = "%s 北京 %d 场活动：%s%s" % (rng, len(acts), " · ".join(names), " 等" if len(acts) > 3 else "")
+    return inject_meta(html, title, desc, SITE_URL)
 
 
 def main():
